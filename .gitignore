@@ -1,0 +1,27 @@
+# Firebase config (contains my project keys, so each person adds their own)
+app/google-services.json
+
+# Signing keys
+*.jks
+*.keystore
+keystore.properties
+
+# Local and IDE files
+local.properties
+.idea/
+*.iml
+.DS_Store
+.gradle/
+.externalNativeBuild
+.cxx
+/captures
+
+# Build output
+build/
+*.apk
+*.aab
+/app/release
+
+# Personal notes and temp files
+DESIGN_BRIEF.txt
+_R.json

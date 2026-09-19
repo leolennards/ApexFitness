@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Welcome logo is loaded by name, so keep it from being shrunk -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/apex_fitness_logo" />
