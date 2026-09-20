@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,8 +22,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material3.AlertDialog
@@ -39,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +56,8 @@ import com.example.apexfitness.data.FirestoreRepository
 import com.example.apexfitness.data.Routine
 import com.example.apexfitness.data.RoutineExercise
 import com.example.apexfitness.data.RoutineIcons
+import com.example.apexfitness.data.RoutineTemplate
+import com.example.apexfitness.data.RoutineTemplates
 import com.example.apexfitness.data.todayDayCode
 import com.example.apexfitness.ui.authentication.AuthService
 import com.example.apexfitness.ui.theme.ApexFitnessTheme
@@ -84,6 +91,25 @@ fun RoutineListScreen(navController: NavHostController, previewRoutines: List<Ro
     var routines by remember { mutableStateOf<List<Routine>>(previewRoutines.orEmpty()) }
     var isLoading by remember { mutableStateOf(previewRoutines == null) }
     var routineToDelete by remember { mutableStateOf<Routine?>(null) }
+    var showTemplates by remember { mutableStateOf(false) }
+
+    fun duplicate(routine: Routine) {
+        if (uid == null) return
+        val copy = routine.copy(
+            id = "",
+            name = "${routine.name} (copy)",
+            exercises = routine.exercises.map { it.copy(id = java.util.UUID.randomUUID().toString()) },
+            createdAtMillis = System.currentTimeMillis()
+        )
+        coroutineScope.launch { runCatching { FirestoreRepository.saveRoutine(uid, copy) } }
+        Toast.makeText(context, "Duplicated ${routine.name}", Toast.LENGTH_SHORT).show()
+    }
+
+    fun addTemplate(template: RoutineTemplate) {
+        if (uid == null) return
+        coroutineScope.launch { runCatching { FirestoreRepository.saveRoutine(uid, template.toRoutine()) } }
+        Toast.makeText(context, "Added ${template.name}", Toast.LENGTH_SHORT).show()
+    }
 
     LaunchedEffect(uid) {
         if (previewRoutines != null) {
@@ -118,6 +144,7 @@ fun RoutineListScreen(navController: NavHostController, previewRoutines: List<Ro
         Column(modifier = Modifier.fillMaxSize()) {
             RoutinesHeader(
                 onNew = { navController.navigate("routineEditor/new") },
+                onBack = { navController.popBackStack() },
                 modifier = Modifier
                     .padding(horizontal = Dimens.ScreenEdge)
                     .padding(top = Dimens.Space3, bottom = Dimens.Space2)
@@ -132,7 +159,10 @@ fun RoutineListScreen(navController: NavHostController, previewRoutines: List<Ro
             ) { state ->
                 when (state) {
                     0 -> RoutinesSkeleton()
-                    1 -> EmptyRoutinesState(onCreate = { navController.navigate("routineEditor/new") })
+                    1 -> EmptyRoutinesState(
+                        onCreate = { navController.navigate("routineEditor/new") },
+                        onTemplates = { showTemplates = true }
+                    )
                     else -> LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
@@ -143,6 +173,19 @@ fun RoutineListScreen(navController: NavHostController, previewRoutines: List<Ro
                         ),
                         verticalArrangement = Arrangement.spacedBy(Dimens.Space3)
                     ) {
+                        item(key = "templates-link") {
+                            TextButton(
+                                onClick = { showTemplates = true },
+                                modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+                            ) {
+                                Text(
+                                    text = "Start from a template",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.apex.accentText
+                                )
+                            }
+                        }
+
                         items(DAYS_OF_WEEK.filter { day -> routines.any { it.days.contains(day) } }, key = { "day-$it" }) { day ->
                             DaySection(
                                 day = day,
@@ -150,6 +193,7 @@ fun RoutineListScreen(navController: NavHostController, previewRoutines: List<Ro
                                 routines = routines.filter { it.days.contains(day) },
                                 glassState = glassState,
                                 onEdit = { navController.navigate("routineEditor/${it.id}") },
+                                onDuplicate = { duplicate(it) },
                                 onDelete = { routineToDelete = it },
                                 modifier = Modifier
                                     .staggeredEntrance(
@@ -167,6 +211,7 @@ fun RoutineListScreen(navController: NavHostController, previewRoutines: List<Ro
                                     routines = unscheduled,
                                     glassState = glassState,
                                     onEdit = { navController.navigate("routineEditor/${it.id}") },
+                                    onDuplicate = { duplicate(it) },
                                     onDelete = { routineToDelete = it },
                                     modifier = Modifier.staggeredEntrance(index = 8, key = "routines-day-unscheduled")
                                 )
@@ -176,6 +221,64 @@ fun RoutineListScreen(navController: NavHostController, previewRoutines: List<Ro
                 }
             }
         }
+    }
+
+    if (showTemplates) {
+        AlertDialog(
+            onDismissRequest = { showTemplates = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = ApexShapes.large,
+            title = {
+                Text(
+                    text = "Start from a template",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.Space1)
+                ) {
+                    RoutineTemplates.all.forEach { template ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(ApexShapes.small)
+                                .border(Dimens.Hairline, MaterialTheme.apex.hairline, ApexShapes.small)
+                                .apexClickable {
+                                    addTemplate(template)
+                                    showTemplates = false
+                                }
+                                .padding(Dimens.Space2)
+                        ) {
+                            Text(
+                                text = template.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "${template.description} - ${template.exercises.size} exercises",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.apex.mutedText
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showTemplates = false },
+                    modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+                ) {
+                    Text(
+                        text = "Close",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        )
     }
 
     val pendingDelete = routineToDelete
@@ -233,12 +336,28 @@ fun RoutineListScreen(navController: NavHostController, previewRoutines: List<Ro
 }
 
 @Composable
-private fun RoutinesHeader(onNew: () -> Unit, modifier: Modifier = Modifier) {
+private fun RoutinesHeader(onNew: () -> Unit, onBack: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Box(
+            modifier = Modifier
+                .size(Dimens.MinTouchTarget)
+                .apexClickable(onClick = onBack)
+                .clip(CircleShape)
+                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = "Back",
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(Dimens.Space2))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "BUILT BY YOU, FOR YOU",
@@ -280,6 +399,7 @@ private fun DaySection(
     routines: List<Routine>,
     glassState: com.example.apexfitness.ui.theme.GlassState,
     onEdit: (Routine) -> Unit,
+    onDuplicate: (Routine) -> Unit,
     onDelete: (Routine) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -319,6 +439,7 @@ private fun DaySection(
                         SharedKeys.lastEditor = sharedKey
                         onEdit(routine)
                     },
+                    onDuplicate = { onDuplicate(routine) },
                     onDelete = { onDelete(routine) }
                 )
             }
@@ -332,6 +453,7 @@ private fun RoutineRow(
     glassState: com.example.apexfitness.ui.theme.GlassState,
     sharedKey: String,
     onEdit: () -> Unit,
+    onDuplicate: () -> Unit,
     onDelete: () -> Unit
 ) {
     val count = routine.exercises.size
@@ -377,6 +499,18 @@ private fun RoutineRow(
         Box(
             modifier = Modifier
                 .size(Dimens.MinTouchTarget)
+                .apexClickable(onClick = onDuplicate),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.ContentCopy,
+                contentDescription = "Duplicate ${routine.name}",
+                tint = MaterialTheme.apex.mutedText
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(Dimens.MinTouchTarget)
                 .apexClickable(onClick = onDelete),
             contentAlignment = Alignment.Center
         ) {
@@ -414,7 +548,7 @@ private fun RoutinesSkeleton() {
 }
 
 @Composable
-private fun EmptyRoutinesState(onCreate: () -> Unit) {
+private fun EmptyRoutinesState(onCreate: () -> Unit, onTemplates: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -456,6 +590,17 @@ private fun EmptyRoutinesState(onCreate: () -> Unit) {
             onClick = onCreate,
             icon = Icons.Outlined.Add
         )
+        Spacer(modifier = Modifier.height(Dimens.Space1))
+        TextButton(
+            onClick = onTemplates,
+            modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+        ) {
+            Text(
+                text = "Or start from a template",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.apex.accentText
+            )
+        }
     }
 }
 

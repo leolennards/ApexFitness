@@ -1,6 +1,7 @@
 package com.example.apexfitness.ui.history
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,12 +21,17 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,7 +50,9 @@ import com.example.apexfitness.data.LoggedExercise
 import com.example.apexfitness.data.LoggedSet
 import com.example.apexfitness.data.WorkoutLog
 import com.example.apexfitness.ui.authentication.AuthService
+import com.example.apexfitness.ui.settings.UnitPreferences
 import com.example.apexfitness.ui.theme.ApexFitnessTheme
+import com.example.apexfitness.ui.theme.ApexShapes
 import com.example.apexfitness.ui.theme.ApexScreenHeader
 import com.example.apexfitness.ui.theme.ApexText
 import com.example.apexfitness.ui.theme.CardShape
@@ -53,11 +62,13 @@ import com.example.apexfitness.ui.theme.Motion
 import com.example.apexfitness.ui.theme.PillShape
 import com.example.apexfitness.ui.theme.SkeletonBlock
 import com.example.apexfitness.ui.theme.apex
+import com.example.apexfitness.ui.theme.apexClickable
 import com.example.apexfitness.ui.theme.glassPanel
 import com.example.apexfitness.ui.theme.glassScreenBackground
 import com.example.apexfitness.ui.theme.motionTween
 import com.example.apexfitness.ui.theme.rememberGlassState
 import com.example.apexfitness.ui.theme.staggeredEntrance
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -76,6 +87,9 @@ fun ActivityHistoryScreen(
 
     var logs by remember { mutableStateOf(previewLogs ?: emptyList()) }
     var isLoading by remember { mutableStateOf(previewLogs == null) }
+    var logToDelete by remember { mutableStateOf<WorkoutLog?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    val useLbs = UnitPreferences.useLbs.collectAsState().value
 
     val glassState = rememberGlassState()
 
@@ -89,6 +103,17 @@ fun ActivityHistoryScreen(
             isLoading = false
         }
     }
+
+    DeleteLogDialogHost(
+        pending = logToDelete,
+        onCancel = { logToDelete = null },
+        onConfirm = { log ->
+            logToDelete = null
+            if (uid != null && log.id.isNotBlank()) {
+                coroutineScope.launch { runCatching { FirestoreRepository.deleteWorkoutLog(uid, log.id) } }
+            }
+        }
+    )
 
     val state = when {
         isLoading -> HistoryState.Loading
@@ -143,6 +168,8 @@ fun ActivityHistoryScreen(
                         WorkoutLogCard(
                             log = log,
                             glassState = glassState,
+                            useLbs = useLbs,
+                            onDelete = { logToDelete = log },
                             modifier = Modifier.staggeredEntrance(
                                 index = index.coerceAtMost(8),
                                 key = "history-$index"
@@ -153,6 +180,58 @@ fun ActivityHistoryScreen(
             }
         }
     }
+}
+
+@Composable
+private fun DeleteLogDialogHost(
+    pending: WorkoutLog?,
+    onCancel: () -> Unit,
+    onConfirm: (WorkoutLog) -> Unit
+) {
+    if (pending == null) return
+    AlertDialog(
+        onDismissRequest = onCancel,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = ApexShapes.large,
+        title = {
+            Text(
+                text = "Delete this workout?",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Text(
+                text = "It will be removed from your history and stats. This cannot be undone.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.apex.mutedText
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(pending) },
+                modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+            ) {
+                Text(
+                    text = "Delete",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.apex.errorText
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onCancel,
+                modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+            ) {
+                Text(
+                    text = "Cancel",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    )
 }
 
 @Composable
@@ -198,8 +277,11 @@ private fun EmptyHistoryState(modifier: Modifier = Modifier) {
 private fun WorkoutLogCard(
     log: WorkoutLog,
     glassState: com.example.apexfitness.ui.theme.GlassState,
+    useLbs: Boolean,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var expanded by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
     val completedSets = remember(log) { log.exercises.sumOf { ex -> ex.sets.count { it.completed } } }
     val totalSets = remember(log) { log.exercises.sumOf { it.sets.size } }
@@ -207,8 +289,10 @@ private fun WorkoutLogCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .apexClickable { expanded = !expanded }
             .glassPanel(glassState, shape = CardShape)
             .padding(Dimens.Space2 + 4.dp)
+            .animateContentSize()
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -272,6 +356,62 @@ private fun WorkoutLogCard(
                 valueStyle = ApexText.NumeralSmall,
                 horizontalAlignment = Alignment.Start
             )
+        }
+
+        if (expanded) {
+            Spacer(modifier = Modifier.height(Dimens.Space2))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(Dimens.Hairline)
+                    .background(MaterialTheme.apex.hairline)
+            )
+            Spacer(modifier = Modifier.height(Dimens.Space1))
+
+            if (log.exercises.isEmpty()) {
+                Text(
+                    text = "No sets were recorded for this workout.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.apex.mutedText
+                )
+            }
+            log.exercises.forEach { exercise ->
+                Spacer(modifier = Modifier.height(Dimens.Space1))
+                Text(
+                    text = exercise.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                exercise.sets.forEach { set ->
+                    val weight = UnitPreferences.format(UnitPreferences.fromKg(set.weight, useLbs))
+                    val unit = UnitPreferences.label(useLbs)
+                    val detail = if (set.weight > 0.0) "${set.reps} x $weight $unit" else "${set.reps} reps"
+                    Text(
+                        text = "Set ${set.setNumber}   $detail" + if (set.completed) "" else "   (not completed)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (set.completed) MaterialTheme.colorScheme.onSurface else MaterialTheme.apex.mutedText
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(Dimens.Space1))
+            TextButton(
+                onClick = onDelete,
+                modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.DeleteOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.apex.errorText,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Delete workout",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.apex.errorText
+                )
+            }
         }
     }
 }

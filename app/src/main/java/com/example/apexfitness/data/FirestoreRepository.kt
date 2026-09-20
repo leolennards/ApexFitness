@@ -141,6 +141,10 @@ object FirestoreRepository {
         return docRef.id
     }
 
+    suspend fun deleteWorkoutLog(uid: String, logId: String) {
+        logsCol(uid).document(logId).delete().awaitWrite()
+    }
+
     // Every workout, oldest first (used for the CSV export)
     suspend fun getAllWorkoutLogs(uid: String): List<WorkoutLog> {
         val snap = logsCol(uid).orderBy("dateMillis", Query.Direction.ASCENDING).get().await()

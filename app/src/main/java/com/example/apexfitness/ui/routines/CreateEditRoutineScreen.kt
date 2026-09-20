@@ -760,11 +760,30 @@ private fun ExercisePickerDialog(
                 .border(Dimens.Hairline, MaterialTheme.apex.hairline, ApexShapes.large)
                 .padding(Dimens.Space3)
         ) {
-            Text(
-                text = "Add Exercise",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Add Exercise",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Box(
+                    modifier = Modifier
+                        .size(Dimens.MinTouchTarget)
+                        .apexClickable(onClick = onDismiss)
+                        .clip(CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = "Close",
+                        tint = MaterialTheme.apex.mutedText
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(Dimens.Space2))
             OutlinedTextField(
                 value = search,
