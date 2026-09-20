@@ -13,6 +13,8 @@ ApexFitness is an Android fitness tracking app that I built with Kotlin and Jetp
 - Calendar and activity history
 - Weekly workout reminders (AlarmManager)
 - Light and dark theme, with a short fade when switching
+- Rest timer between sets, and a kg or lb setting
+- Delete account, which removes all of the user's data
 
 ## Built with
 
@@ -37,6 +39,10 @@ ApexFitness is an Android fitness tracking app that I built with Kotlin and Jetp
 5. Download `google-services.json` and put it in the `app` folder. The file `app/google-services.json.example` shows the layout. My own file is not in this repo on purpose.
 6. In `gradle.properties`, change the `org.gradle.java.home` line to your own JDK or delete it.
 7. Sync Gradle and run the app.
+
+## Privacy policy
+
+The policy page is in `docs/privacy.html` (it can be served with GitHub Pages from the `docs` folder).
 
 ## What I learned
 

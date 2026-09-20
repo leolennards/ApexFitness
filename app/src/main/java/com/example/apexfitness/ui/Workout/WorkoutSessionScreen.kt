@@ -1,5 +1,6 @@
 package com.example.apexfitness.ui.Workout
 
+import com.example.apexfitness.ui.settings.UnitPreferences
 import android.media.AudioManager
 import android.media.ToneGenerator
 import androidx.compose.animation.AnimatedContent
@@ -90,6 +91,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     val authService = remember { AuthService(context.applicationContext) }
     val uid = authService.getCurrentUser()?.uid
     val coroutineScope = rememberCoroutineScope()
+    val useLbs = UnitPreferences.useLbs.collectAsState().value
 
     var routine by remember { mutableStateOf<Routine?>(previewRoutine) }
     var isLoading by remember { mutableStateOf(previewRoutine == null) }
@@ -178,7 +180,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                     LoggedSet(
                         setNumber = index + 1,
                         reps = set.reps.toIntOrNull() ?: 0,
-                        weight = set.weight.toDoubleOrNull() ?: 0.0,
+                        weight = UnitPreferences.toKg(set.weight.toDoubleOrNull() ?: 0.0, useLbs),  // saved in kg
                         completed = set.completed
                     )
                 }
@@ -671,7 +673,7 @@ private fun SessionExerciseCard(
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(text = "SET", style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.weight(0.5f))
             Text(text = "REPS", style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.weight(1f))
-            Text(text = "WEIGHT", style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.weight(1f))
+            Text(text = "WEIGHT (${UnitPreferences.label(UnitPreferences.useLbs.collectAsState().value).uppercase()})", style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.weight(1f))
             Spacer(modifier = Modifier.width(Dimens.MinTouchTarget))
         }
         Spacer(modifier = Modifier.height(Dimens.Space1))

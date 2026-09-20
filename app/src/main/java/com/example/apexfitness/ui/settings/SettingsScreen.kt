@@ -1,7 +1,10 @@
 package com.example.apexfitness.ui.settings
 
+import androidx.compose.runtime.collectAsState
 import android.Manifest
 import android.app.TimePickerDialog
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -36,37 +39,55 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.MailOutline
+import androidx.compose.material.icons.outlined.MonitorWeight
+import androidx.compose.material.icons.outlined.PrivacyTip
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.example.apexfitness.data.FirestoreRepository
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.common.api.ApiException
+import kotlinx.coroutines.launch
 import com.example.apexfitness.ui.authentication.AuthService
 import com.example.apexfitness.ui.notifications.NotificationScheduler
 import com.example.apexfitness.ui.theme.ApexFitnessTheme
+import com.example.apexfitness.ui.theme.ApexShapes
+import com.example.apexfitness.ui.theme.ApexTextField
 import com.example.apexfitness.ui.theme.CardShape
 import com.example.apexfitness.ui.theme.Dimens
 import com.example.apexfitness.ui.theme.Motion
@@ -81,6 +102,10 @@ import com.example.apexfitness.ui.theme.rememberHaptics
 import com.example.apexfitness.ui.theme.staggeredEntrance
 
 // Settings screen
+
+// Where the privacy policy is hosted (the page is in the docs folder of the repo, served with GitHub Pages)
+private const val PRIVACY_POLICY_URL = "https://leolennards.github.io/ApexFitness/privacy.html"
+private const val FEEDBACK_EMAIL = "leo.lukelennards@gmail.com"
 
 @Composable
 fun SettingsScreen(
@@ -123,6 +148,139 @@ fun SettingsScreen(
         }
     }
 
+    val useLbs = UnitPreferences.useLbs.collectAsState().value
+
+    // Delete account
+    val scope = rememberCoroutineScope()
+    val usesPassword = remember { authService.usesPassword() }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
+    var passwordInput by remember { mutableStateOf("") }
+
+    // Confirms who is asking, wipes the data, then removes the account and goes back to Welcome
+    fun runDelete(reauth: suspend () -> Result<Unit>) {
+        scope.launch {
+            deleting = true
+            deleteError = null
+            if (reauth().isFailure) {
+                deleteError = if (usesPassword) "That password is not right, please try again." else "I could not confirm your Google account."
+                deleting = false
+                return@launch
+            }
+            val uid = authService.getCurrentUser()?.uid
+            try {
+                if (uid != null) FirestoreRepository.deleteAllUserData(uid)
+            } catch (e: Exception) {
+                deleteError = "Could not delete your data. Check your connection and try again."
+                deleting = false
+                return@launch
+            }
+            if (authService.deleteCurrentUser().isFailure) {
+                deleteError = "Your data was removed but the account could not be deleted. Please try again."
+                deleting = false
+                return@launch
+            }
+            NotificationScheduler.cancelAll(context.applicationContext)
+            authService.signOut()
+            navController.navigate("welcome") {
+                popUpTo(navController.graph.id) { inclusive = true }
+            }
+        }
+    }
+
+    val googleConfirmLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        try {
+            val account = GoogleSignIn.getSignedInAccountFromIntent(result.data).getResult(ApiException::class.java)
+            val idToken = account.idToken
+            if (idToken != null) {
+                runDelete { authService.reauthWithGoogle(idToken) }
+            } else {
+                deleteError = "I could not confirm your Google account."
+            }
+        } catch (e: ApiException) {
+            deleteError = "Google sign in was cancelled."
+        }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!deleting) showDeleteDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = ApexShapes.large,
+            title = {
+                Text(
+                    text = "Delete account?",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(Dimens.Space2)) {
+                    Text(
+                        text = "This permanently deletes your account and everything in it: routines, workouts, records, challenges and progress. It cannot be undone.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.apex.mutedText
+                    )
+                    if (usesPassword) {
+                        ApexTextField(
+                            value = passwordInput,
+                            onValueChange = { passwordInput = it },
+                            label = "Enter your password to confirm",
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            isError = deleteError != null,
+                            container = MaterialTheme.colorScheme.background
+                        )
+                    } else {
+                        Text(
+                            text = "You will be asked to sign in with Google once more to confirm.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.apex.mutedText
+                        )
+                    }
+                    deleteError?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !deleting && (!usesPassword || passwordInput.isNotEmpty()),
+                    onClick = {
+                        if (usesPassword) {
+                            runDelete { authService.reauthWithPassword(passwordInput) }
+                        } else {
+                            googleConfirmLauncher.launch(authService.getGoogleSignInClient().signInIntent)
+                        }
+                    },
+                    modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+                ) {
+                    Text(
+                        text = if (deleting) "Deleting..." else "Delete",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deleting,
+                    onClick = { showDeleteDialog = false },
+                    modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+                ) {
+                    Text(text = "Cancel", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        )
+    }
+
     val motionEnabled = LocalMotionEnabled.current
 
     Column(
@@ -153,6 +311,21 @@ fun SettingsScreen(
                         subtitle = if (isDarkMode) "On" else "Off",
                         checked = isDarkMode,
                         onCheckedChange = onToggleDarkMode
+                    )
+                }
+            }
+
+            SettingsSection(
+                label = "Units",
+                modifier = Modifier.staggeredEntrance(index = 1, key = "settings-units")
+            ) {
+                SettingsCard(glassState = glassState) {
+                    SettingsToggleRow(
+                        icon = Icons.Outlined.MonitorWeight,
+                        title = "Use pounds (lb)",
+                        subtitle = if (useLbs) "Weights are shown in lb" else "Weights are shown in kg",
+                        checked = useLbs,
+                        onCheckedChange = { UnitPreferences.setUseLbs(context.applicationContext, it) }
                     )
                 }
             }
@@ -222,6 +395,17 @@ fun SettingsScreen(
                         title = "Edit Profile",
                         onClick = { navController.navigate("editProfile") }
                     )
+                    RowDivider()
+                    SettingsNavRow(
+                        icon = Icons.Outlined.DeleteOutline,
+                        title = "Delete account",
+                        tint = MaterialTheme.colorScheme.error,
+                        onClick = {
+                            passwordInput = ""
+                            deleteError = null
+                            showDeleteDialog = true
+                        }
+                    )
                 }
             }
 
@@ -230,6 +414,57 @@ fun SettingsScreen(
                 modifier = Modifier.staggeredEntrance(index = 3, key = "settings-about")
             ) {
                 SettingsCard(glassState = glassState) {
+                    SettingsNavRow(
+                        icon = Icons.Outlined.PrivacyTip,
+                        title = "Privacy Policy",
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL))) }
+                    )
+                    RowDivider()
+                    SettingsNavRow(
+                        icon = Icons.Outlined.StarOutline,
+                        title = "Rate the app",
+                        onClick = {
+                            val pkg = context.packageName
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")))
+                            } catch (e: Exception) {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$pkg")))
+                            }
+                        }
+                    )
+                    RowDivider()
+                    SettingsNavRow(
+                        icon = Icons.Outlined.MailOutline,
+                        title = "Send feedback",
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                data = Uri.parse("mailto:")
+                                putExtra(Intent.EXTRA_EMAIL, arrayOf(FEEDBACK_EMAIL))
+                                putExtra(Intent.EXTRA_SUBJECT, "ApexFitness feedback")
+                            }
+                            try {
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // No email app installed, nothing to do
+                            }
+                        }
+                    )
+                    RowDivider()
+                    SettingsNavRow(
+                        icon = Icons.Outlined.Share,
+                        title = "Share ApexFitness",
+                        onClick = {
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    "Check out ApexFitness: https://play.google.com/store/apps/details?id=${context.packageName}"
+                                )
+                            }
+                            context.startActivity(Intent.createChooser(send, "Share ApexFitness"))
+                        }
+                    )
+                    RowDivider()
                     SettingsInfoRow(
                         icon = Icons.Outlined.Info,
                         title = "Version",
@@ -334,11 +569,11 @@ private fun RowDivider() {
 }
 
 @Composable
-private fun RowIcon(icon: ImageVector) {
+private fun RowIcon(icon: ImageVector, tint: Color = MaterialTheme.apex.accentText) {
     Icon(
         imageVector = icon,
         contentDescription = null,
-        tint = MaterialTheme.apex.accentText,
+        tint = tint,
         modifier = Modifier.size(22.dp)
     )
 }
@@ -395,7 +630,12 @@ private fun SettingsToggleRow(
 }
 
 @Composable
-private fun SettingsNavRow(icon: ImageVector, title: String, onClick: () -> Unit) {
+private fun SettingsNavRow(
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit,
+    tint: Color? = null
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -404,12 +644,12 @@ private fun SettingsNavRow(icon: ImageVector, title: String, onClick: () -> Unit
             .padding(horizontal = Dimens.Space2),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RowIcon(icon)
+        RowIcon(icon, tint ?: MaterialTheme.apex.accentText)
         Spacer(modifier = Modifier.width(Dimens.Space2))
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = tint ?: MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
         Icon(

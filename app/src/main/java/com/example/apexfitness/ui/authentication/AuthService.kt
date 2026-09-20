@@ -5,6 +5,7 @@ import com.example.apexfitness.R
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
@@ -94,6 +95,42 @@ class AuthService(private val context: Context) {
             val result = firebaseAuth.signInWithCredential(credential).await()
             val user = result.user ?: return Result.failure(IllegalStateException("Google sign in failed"))
             Result.success(user)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // True when the account signs in with an email and password
+    fun usesPassword(): Boolean =
+        auth?.currentUser?.providerData?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
+
+    // Firebase wants a recent sign in before it deletes an account, so the user confirms first
+    suspend fun reauthWithPassword(password: String): Result<Unit> {
+        val user = auth?.currentUser ?: return Result.failure(IllegalStateException("Not signed in"))
+        val email = user.email ?: return Result.failure(IllegalStateException("No email on this account"))
+        return try {
+            user.reauthenticate(EmailAuthProvider.getCredential(email, password)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun reauthWithGoogle(idToken: String): Result<Unit> {
+        val user = auth?.currentUser ?: return Result.failure(IllegalStateException("Not signed in"))
+        return try {
+            user.reauthenticate(GoogleAuthProvider.getCredential(idToken, null)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteCurrentUser(): Result<Unit> {
+        val user = auth?.currentUser ?: return Result.failure(IllegalStateException("Not signed in"))
+        return try {
+            user.delete().await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

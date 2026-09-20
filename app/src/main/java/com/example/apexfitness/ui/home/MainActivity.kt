@@ -2,6 +2,7 @@
 
 package com.example.apexfitness.ui.home
 
+import com.example.apexfitness.ui.settings.UnitPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -125,6 +126,7 @@ class MainActivity : ComponentActivity() {
         }
         ThemePreferences.init(applicationContext)
         NotificationPreferences.init(applicationContext)
+        UnitPreferences.init(applicationContext)
         NotificationScheduler.createChannel(applicationContext)
         setContent {
             val isDarkMode by ThemePreferences.isDarkMode.collectAsState()

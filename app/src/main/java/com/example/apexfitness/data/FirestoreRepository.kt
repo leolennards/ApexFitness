@@ -7,6 +7,9 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import com.google.android.gms.tasks.Task
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,6 +28,13 @@ import java.util.Locale
 object FirestoreRepository {
     private val db = FirebaseFirestore.getInstance()
 
+    // Firestore saves a write on the phone straight away and sends it when there is signal, but
+    // the Task only finishes once the server confirms. At the gym the signal can be bad, so I wait
+    // a few seconds and then carry on (the write is already queued and will sync later).
+    private suspend fun Task<Void>.awaitWrite() {
+        withTimeoutOrNull(4000) { await() }
+    }
+
     private fun userDoc(uid: String) = db.collection("users").document(uid)
     private fun routinesCol(uid: String) = userDoc(uid).collection("routines")
     private fun logsCol(uid: String) = userDoc(uid).collection("workoutLogs")
@@ -35,6 +45,24 @@ object FirestoreRepository {
 
     private fun todayDateKey(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
+    // Deletes everything stored for this user (used by "Delete account")
+    suspend fun deleteAllUserData(uid: String): Unit = withTimeout(30000) {
+        val collections = listOf(
+            routinesCol(uid), logsCol(uid), prCol(uid),
+            challengesCol(uid), waterLogsCol(uid), cardioLogsCol(uid)
+        )
+        for (col in collections) {
+            val docs = col.get().await().documents
+            // A batch can hold 500 writes, so I delete in chunks
+            docs.chunked(400).forEach { chunk ->
+                val batch = db.batch()
+                chunk.forEach { batch.delete(it.reference) }
+                batch.commit().await()
+            }
+        }
+        userDoc(uid).delete().await()
+    }
+
     // Profile
 
     suspend fun getProfile(uid: String): UserProfile? {
@@ -43,11 +71,11 @@ object FirestoreRepository {
     }
 
     suspend fun saveProfile(profile: UserProfile) {
-        userDoc(profile.uid).set(profile).await()
+        userDoc(profile.uid).set(profile).awaitWrite()
     }
 
     suspend fun updateProfileFields(uid: String, fields: Map<String, Any?>) {
-        userDoc(uid).set(fields, SetOptions.merge()).await()
+        userDoc(uid).set(fields, SetOptions.merge()).awaitWrite()
     }
 
     fun observeProfile(uid: String): Flow<UserProfile?> = callbackFlow {
@@ -83,12 +111,12 @@ object FirestoreRepository {
     suspend fun saveRoutine(uid: String, routine: Routine): String {
         val docRef = if (routine.id.isBlank()) routinesCol(uid).document() else routinesCol(uid).document(routine.id)
         val toSave = routine.copy(id = docRef.id, updatedAtMillis = System.currentTimeMillis())
-        docRef.set(toSave).await()
+        docRef.set(toSave).awaitWrite()
         return docRef.id
     }
 
     suspend fun deleteRoutine(uid: String, routineId: String) {
-        routinesCol(uid).document(routineId).delete().await()
+        routinesCol(uid).document(routineId).delete().awaitWrite()
     }
 
     // Workout logs
@@ -108,7 +136,7 @@ object FirestoreRepository {
 
     suspend fun addWorkoutLog(uid: String, log: WorkoutLog): String {
         val docRef = logsCol(uid).document()
-        docRef.set(log.copy(id = docRef.id)).await()
+        docRef.set(log.copy(id = docRef.id)).awaitWrite()
         return docRef.id
     }
 
@@ -137,7 +165,7 @@ object FirestoreRepository {
                     bestReps = reps,
                     updatedAtMillis = System.currentTimeMillis()
                 )
-            ).await()
+            ).awaitWrite()
         }
     }
 
@@ -164,18 +192,18 @@ object FirestoreRepository {
             completed = false,
             completedAtMillis = 0L
         )
-        challengesCol(uid).document(templateId).set(challenge).await()
+        challengesCol(uid).document(templateId).set(challenge).awaitWrite()
     }
 
     suspend fun markChallengeCompleted(uid: String, challengeId: String) {
         challengesCol(uid).document(challengeId).set(
             mapOf("completed" to true, "completedAtMillis" to System.currentTimeMillis()),
             SetOptions.merge()
-        ).await()
+        ).awaitWrite()
     }
 
     suspend fun abandonChallenge(uid: String, challengeId: String) {
-        challengesCol(uid).document(challengeId).delete().await()
+        challengesCol(uid).document(challengeId).delete().awaitWrite()
     }
 
     // Water
@@ -204,7 +232,7 @@ object FirestoreRepository {
         val docRef = waterLogsCol(uid).document(todayDateKey())
         val existing = docRef.get().await().toObject(WaterLog::class.java)
         val newTotal = ((existing?.millilitersConsumed ?: 0) + deltaMl).coerceAtLeast(0)
-        docRef.set(WaterLog(dateKey = todayDateKey(), millilitersConsumed = newTotal)).await()
+        docRef.set(WaterLog(dateKey = todayDateKey(), millilitersConsumed = newTotal)).awaitWrite()
     }
 
     // Cardio logs
@@ -224,11 +252,11 @@ object FirestoreRepository {
 
     suspend fun addCardioLog(uid: String, log: CardioLog): String {
         val docRef = cardioLogsCol(uid).document()
-        docRef.set(log.copy(id = docRef.id)).await()
+        docRef.set(log.copy(id = docRef.id)).awaitWrite()
         return docRef.id
     }
 
     suspend fun deleteCardioLog(uid: String, logId: String) {
-        cardioLogsCol(uid).document(logId).delete().await()
+        cardioLogsCol(uid).document(logId).delete().awaitWrite()
     }
 }

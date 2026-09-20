@@ -1,5 +1,7 @@
 package com.example.apexfitness.ui.Stats
 
+import androidx.compose.runtime.collectAsState
+import com.example.apexfitness.ui.settings.UnitPreferences
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -107,6 +109,7 @@ private fun StatsContent(
     val dayLabels = remember { last7DayLabels() }
     val caloriesThisWeek = remember(logs) { StatsCalculations.caloriesThisWeek(logs) }
     val badgeCount = remember(logs) { listOf(1, 5, 10, 25, 50, 100).count { logs.size >= it } }
+    val useLbs = UnitPreferences.useLbs.collectAsState().value
     val weeklyVolume = remember(logs) { StatsCalculations.weeklyVolume(logs) }
     val volumeWeekLabels = remember { volumeTrendLabels(weeklyVolume.size) }
     val muscleGroupBreakdown = remember(logs) { StatsCalculations.muscleGroupBreakdown(logs) }
@@ -165,11 +168,11 @@ private fun StatsContent(
                     .staggeredEntrance(index = 3, key = "stats-volume")
             ) {
                 BarChartCard(
-                    values = weeklyVolume.map { it.toFloat() },
+                    values = weeklyVolume.map { UnitPreferences.fromKg(it, useLbs).toFloat() },
                     labels = volumeWeekLabels,
                     minScale = 1f,
-                    headline = "${weeklyVolume.sum().toInt()}",
-                    headlineLabel = "KG TOTAL",
+                    headline = "${UnitPreferences.fromKg(weeklyVolume.sum(), useLbs).toInt()}",
+                    headlineLabel = "${UnitPreferences.label(useLbs).uppercase()} TOTAL",
                     glassState = glassState
                 )
             }
@@ -522,8 +525,9 @@ private fun PersonalRecordRow(
     glassState: com.example.apexfitness.ui.theme.GlassState,
     modifier: Modifier = Modifier
 ) {
+    val useLbs = UnitPreferences.useLbs.collectAsState().value
     val result = if (record.bestWeight > 0) {
-        "${formatWeight(record.bestWeight)} x ${record.bestReps}"
+        "${formatWeight(UnitPreferences.fromKg(record.bestWeight, useLbs))} ${UnitPreferences.label(useLbs)} x ${record.bestReps}"
     } else {
         "${record.bestReps} reps"
     }
@@ -645,8 +649,7 @@ private fun last7DayLabels(): List<String> {
 private fun volumeTrendLabels(count: Int): List<String> =
     (count - 1 downTo 0).map { weeksAgo -> if (weeksAgo == 0) "Now" else "-${weeksAgo}w" }
 
-private fun formatWeight(weight: Double): String =
-    if (weight == weight.toLong().toDouble()) "${weight.toLong()}" else "$weight"
+private fun formatWeight(weight: Double): String = UnitPreferences.format(weight)
 
 // ---- Previews ----
 

@@ -1,5 +1,7 @@
 package com.example.apexfitness.ui.Profile
 
+import androidx.compose.runtime.collectAsState
+import com.example.apexfitness.ui.settings.UnitPreferences
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -69,7 +71,9 @@ fun EditProfileScreen(navController: NavHostController) {
     var goals by remember { mutableStateOf(setOf<String>()) }
     var scheduleDays by remember { mutableStateOf(setOf<String>()) }
     var preferredTime by remember { mutableStateOf("Morning") }
-    var weightKg by remember { mutableStateOf("") }
+    val useLbs = UnitPreferences.useLbs.collectAsState().value
+    // What the user typed, in kg or lb depending on the unit setting (it is converted to kg on save)
+    var weightInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
 
@@ -82,7 +86,7 @@ fun EditProfileScreen(navController: NavHostController) {
                 goals = profile.goals.toSet()
                 scheduleDays = profile.scheduleDays.toSet()
                 preferredTime = profile.preferredTime.ifBlank { "Morning" }
-                weightKg = if (profile.weightKg > 0) profile.weightKg.toString() else ""
+                weightInput = if (profile.weightKg > 0) UnitPreferences.format(UnitPreferences.fromKg(profile.weightKg, useLbs)) else ""
             }
         }
         isLoading = false
@@ -106,7 +110,7 @@ fun EditProfileScreen(navController: NavHostController) {
                         "goals" to goals.toList(),
                         "scheduleDays" to scheduleDays.toList(),
                         "preferredTime" to preferredTime,
-                        "weightKg" to (weightKg.toDoubleOrNull() ?: 0.0)
+                        "weightKg" to UnitPreferences.toKg(weightInput.toDoubleOrNull() ?: 0.0, useLbs)
                     )
                 )
             }
@@ -204,9 +208,9 @@ fun EditProfileScreen(navController: NavHostController) {
 
                     FormSection(label = "WEIGHT", index = 5) {
                         ApexTextField(
-                            value = weightKg,
-                            onValueChange = { input -> weightKg = input.filter { it.isDigit() || it == '.' } },
-                            label = "Weight (kg)",
+                            value = weightInput,
+                            onValueChange = { input -> weightInput = input.filter { it.isDigit() || it == '.' } },
+                            label = "Weight (${UnitPreferences.label(useLbs)})",
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.fillMaxWidth()
                         )
