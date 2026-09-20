@@ -125,6 +125,17 @@ data class UserChallenge(
     val completedAtMillis: Long = 0L
 )
 
+// One body check-in. Weight is always saved in kg and measurements in cm. 0 means it was not entered.
+data class BodyEntry(
+    val id: String = "",
+    val dateMillis: Long = System.currentTimeMillis(),
+    val weightKg: Double = 0.0,
+    val waistCm: Double = 0.0,
+    val chestCm: Double = 0.0,
+    val hipsCm: Double = 0.0,
+    val armCm: Double = 0.0
+)
+
 // Best result for one exercise
 data class PersonalRecord(
     val exerciseName: String = "",

@@ -27,6 +27,8 @@ import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MilitaryTech
 import androidx.compose.material.icons.outlined.MonitorHeart
+import androidx.compose.material.icons.outlined.MonitorWeight
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
@@ -86,6 +88,8 @@ fun ProfilePage(
     onOpenActivityHistory: () -> Unit = {},
     onOpenChallenges: () -> Unit = {},
     onOpenCardio: () -> Unit = {},
+    onOpenBody: () -> Unit = {},
+    onOpenPhotos: () -> Unit = {},
     onOpenHealthData: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onShareApp: () -> Unit = {},
@@ -112,6 +116,8 @@ fun ProfilePage(
                 onOpenActivityHistory = onOpenActivityHistory,
                 onOpenChallenges = onOpenChallenges,
                 onOpenCardio = onOpenCardio,
+                onOpenBody = onOpenBody,
+                onOpenPhotos = onOpenPhotos,
                 onOpenHealthData = onOpenHealthData,
                 onOpenSettings = onOpenSettings,
                 onShareApp = onShareApp,
@@ -136,6 +142,8 @@ private fun ProfileContent(
     onOpenActivityHistory: () -> Unit,
     onOpenChallenges: () -> Unit,
     onOpenCardio: () -> Unit,
+    onOpenBody: () -> Unit,
+    onOpenPhotos: () -> Unit,
     onOpenHealthData: () -> Unit,
     onOpenSettings: () -> Unit,
     onShareApp: () -> Unit,
@@ -156,6 +164,8 @@ private fun ProfileContent(
         MenuEntry("Activity History", Icons.Outlined.History, onOpenActivityHistory),
         MenuEntry("Challenges", Icons.Outlined.Flag, onOpenChallenges),
         MenuEntry("Cardio", Icons.AutoMirrored.Outlined.DirectionsRun, onOpenCardio),
+        MenuEntry("Body Progress", Icons.Outlined.MonitorWeight, onOpenBody),
+        MenuEntry("Progress Photos", Icons.Outlined.PhotoCamera, onOpenPhotos),
         MenuEntry("Health Data", Icons.Outlined.MonitorHeart, onOpenHealthData),
         MenuEntry("Settings", Icons.Outlined.Settings, onOpenSettings),
         MenuEntry("Share App", Icons.Outlined.Share, onShareApp)

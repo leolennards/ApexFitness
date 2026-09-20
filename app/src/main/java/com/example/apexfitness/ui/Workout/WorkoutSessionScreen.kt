@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Remove
@@ -66,6 +67,9 @@ import com.example.apexfitness.data.WorkoutLog
 import com.example.apexfitness.ui.authentication.AuthService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import com.example.apexfitness.data.ExerciseHistory
+import com.example.apexfitness.data.ExerciseInfo
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -101,6 +105,8 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     var isRestPaused by remember { mutableStateOf(false) }
     var restTimerJob by remember { mutableStateOf<Job?>(null) }
     val startTimeMillis = remember { System.currentTimeMillis() }
+    // What the user did last time and their best, by exercise name (lowercase)
+    var history by remember { mutableStateOf<Map<String, ExerciseHistory>>(emptyMap()) }
 
     val sessionExercises = remember { mutableStateListOf<ExerciseSession>() }
 
@@ -122,6 +128,32 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
             }
         }
         isLoading = false
+    }
+
+    LaunchedEffect(uid) {
+        val id = uid ?: return@LaunchedEffect
+        runCatching {
+            val records = FirestoreRepository.observePersonalRecords(id).first()
+            // Newest workouts come first, so the first match for an exercise is the latest one
+            val logs = FirestoreRepository.observeWorkoutLogs(id, 30).first()
+            val map = mutableMapOf<String, ExerciseHistory>()
+            records.forEach { record ->
+                map[record.exerciseName.trim().lowercase()] = ExerciseHistory(best = record)
+            }
+            logs.forEach { log ->
+                log.exercises.forEach { exercise ->
+                    val key = exercise.name.trim().lowercase()
+                    val existing = map[key]
+                    if (existing?.lastSet == null) {
+                        val bestSet = exercise.sets.filter { it.completed }.maxByOrNull { it.weight * 1000 + it.reps }
+                        if (bestSet != null) {
+                            map[key] = ExerciseHistory(lastSet = bestSet, best = existing?.best)
+                        }
+                    }
+                }
+            }
+            map
+        }.onSuccess { history = it }
     }
 
     fun startRestTimer(seconds: Int) {
@@ -188,6 +220,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
         }
         val completedSets = loggedExercises.sumOf { ex -> ex.sets.count { it.completed } }
 
+        WorkoutSummaryHolder.current = null
         coroutineScope.launch {
             runCatching {
                 val profile = FirestoreRepository.getProfile(currentUid)
@@ -202,15 +235,35 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                         exercises = loggedExercises
                     )
                 )
+                val results = mutableListOf<ExerciseResult>()
                 loggedExercises.forEach { ex ->
                     val bestSet = ex.sets.filter { it.completed }.maxByOrNull { it.weight * 1000 + it.reps }
                     if (bestSet != null && (bestSet.weight > 0 || bestSet.reps > 0)) {
-                        FirestoreRepository.upsertPersonalRecordIfBetter(currentUid, ex.name, bestSet.weight, bestSet.reps)
+                        val isRecord = FirestoreRepository.upsertPersonalRecordIfBetter(currentUid, ex.name, bestSet.weight, bestSet.reps)
+                        results.add(ExerciseResult(ex.name, bestSet.weight, bestSet.reps, isRecord))
                     }
                 }
+                // Hand the finished workout to the summary screen
+                WorkoutSummaryHolder.current = WorkoutSummary(
+                    routineName = currentRoutine.name,
+                    dateMillis = System.currentTimeMillis(),
+                    durationMinutes = durationMinutes,
+                    completedSets = completedSets,
+                    totalSets = loggedExercises.sumOf { it.sets.size },
+                    volumeKg = loggedExercises.sumOf { ex -> ex.sets.filter { it.completed }.sumOf { it.weight * it.reps } },
+                    calories = estimatedCalories,
+                    exercises = results
+                )
             }
             isSaving = false
-            navController.popBackStack()
+            if (WorkoutSummaryHolder.current != null) {
+                // Replace the session with the summary so Back goes to the home screen
+                navController.navigate("workoutSummary") {
+                    popUpTo("workoutSession/{routineId}") { inclusive = true }
+                }
+            } else {
+                navController.popBackStack()
+            }
         }
     }
 
@@ -246,6 +299,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                             isRestPaused = isRestPaused,
                             isSaving = isSaving,
                             glassState = glassState,
+                            history = history,
                             onClose = { navController.popBackStack() },
                             onFinish = { finishWorkout() },
                             onSetCompleted = { session -> startRestTimer(session.exercise.restSeconds) },
@@ -270,6 +324,7 @@ private fun SessionBody(
     isRestPaused: Boolean,
     isSaving: Boolean,
     glassState: com.example.apexfitness.ui.theme.GlassState,
+    history: Map<String, ExerciseHistory> = emptyMap(),
     onClose: () -> Unit,
     onFinish: () -> Unit,
     onSetCompleted: (ExerciseSession) -> Unit,
@@ -305,6 +360,7 @@ private fun SessionBody(
                 SessionExerciseCard(
                     session = session,
                     glassState = glassState,
+                    history = history[session.exercise.name.trim().lowercase()],
                     onSetCompleted = { onSetCompleted(session) },
                     modifier = Modifier.staggeredEntrance(index)
                 )
@@ -652,11 +708,27 @@ private fun SessionExerciseCard(
     session: ExerciseSession,
     glassState: com.example.apexfitness.ui.theme.GlassState,
     onSetCompleted: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    history: ExerciseHistory? = null
 ) {
     val contentColor = glassContentColor()
     val mutedColor = glassMutedContentColor()
     val haptics = rememberHaptics()
+    val useLbs = UnitPreferences.useLbs.collectAsState().value
+    val tip = remember(session.exercise.name) { ExerciseInfo.find(session.exercise.name) }
+    var showTip by remember { mutableStateOf(false) }
+
+    // "80 kg x 8" for a weighted set, "12 reps" for bodyweight
+    fun describe(weightKg: Double, reps: Int): String =
+        if (weightKg > 0) {
+            "${UnitPreferences.format(UnitPreferences.fromKg(weightKg, useLbs))} ${UnitPreferences.label(useLbs)} x $reps"
+        } else {
+            "$reps reps"
+        }
+    val previousParts = buildList {
+        history?.lastSet?.let { add("Last: ${describe(it.weight, it.reps)}") }
+        history?.best?.takeIf { it.bestWeight > 0 || it.bestReps > 0 }?.let { add("Best: ${describe(it.bestWeight, it.bestReps)}") }
+    }
 
     Column(
         modifier = modifier
@@ -665,6 +737,40 @@ private fun SessionExerciseCard(
             .padding(Dimens.Space3)
     ) {
         Text(text = session.exercise.name, style = MaterialTheme.typography.titleLarge, color = contentColor)
+        if (tip != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = tip.muscles.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = mutedColor,
+                    modifier = Modifier.weight(1f)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(Dimens.MinTouchTarget)
+                        .apexClickable(onClick = { showTip = !showTip }),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = "Exercise tip",
+                        tint = if (showTip) MaterialTheme.apex.accentText else mutedColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            if (showTip) {
+                Text(text = tip.tip, style = MaterialTheme.typography.bodySmall, color = contentColor)
+                Spacer(modifier = Modifier.height(Dimens.Space1))
+            }
+        }
+        if (previousParts.isNotEmpty()) {
+            Text(
+                text = previousParts.joinToString("   ·   "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.apex.accentText
+            )
+        }
         if (session.exercise.notes.isNotBlank()) {
             Text(text = session.exercise.notes, style = MaterialTheme.typography.bodySmall, color = mutedColor)
         }

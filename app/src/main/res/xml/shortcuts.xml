@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="start_workout"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_workout"
+        android:shortcutShortLabel="@string/shortcut_workout_short"
+        android:shortcutLongLabel="@string/shortcut_workout_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.leolennards.apexfitness"
+            android:targetClass="com.example.apexfitness.ui.home.MainActivity">
+            <extra
+                android:name="apex_destination"
+                android:value="routines" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="log_water"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_water"
+        android:shortcutShortLabel="@string/shortcut_water_short"
+        android:shortcutLongLabel="@string/shortcut_water_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.leolennards.apexfitness"
+            android:targetClass="com.example.apexfitness.ui.home.MainActivity">
+            <extra
+                android:name="apex_destination"
+                android:value="waterTracking" />
+        </intent>
+    </shortcut>
+</shortcuts>

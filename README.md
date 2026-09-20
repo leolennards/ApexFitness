@@ -15,6 +15,12 @@ ApexFitness is an Android fitness tracking app that I built with Kotlin and Jetp
 - Light and dark theme, with a short fade when switching
 - Rest timer between sets, and a kg or lb setting
 - Delete account, which removes all of the user's data
+- Body progress tracking (weight and measurements) with a chart
+- Progress photos, kept on the phone only, with a then and now comparison
+- A summary screen after each workout, with new personal records and a shareable image
+- Exercise tips, and the last and best result shown during a workout
+- Export of the workout history as a CSV file
+- A home screen widget and app shortcuts for starting a workout or logging water
 
 ## Built with
 

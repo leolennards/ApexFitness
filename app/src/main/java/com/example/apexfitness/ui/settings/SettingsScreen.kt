@@ -5,6 +5,8 @@ import android.Manifest
 import android.app.TimePickerDialog
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
+import com.example.apexfitness.ui.export.CsvExport
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -40,6 +42,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MailOutline
 import androidx.compose.material.icons.outlined.MonitorWeight
@@ -150,8 +153,30 @@ fun SettingsScreen(
 
     val useLbs = UnitPreferences.useLbs.collectAsState().value
 
-    // Delete account
     val scope = rememberCoroutineScope()
+
+    // Export workouts as a CSV file
+    var exporting by remember { mutableStateOf(false) }
+    fun exportWorkouts() {
+        val id = authService.getCurrentUser()?.uid ?: return
+        if (exporting) return
+        exporting = true
+        scope.launch {
+            try {
+                val file = CsvExport.createWorkoutsFile(context.applicationContext, id, useLbs)
+                if (file == null) {
+                    Toast.makeText(context, "No workouts to export yet", Toast.LENGTH_SHORT).show()
+                } else {
+                    CsvExport.share(context, file)
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Could not export your workouts", Toast.LENGTH_SHORT).show()
+            }
+            exporting = false
+        }
+    }
+
+    // Delete account
     val usesPassword = remember { authService.usesPassword() }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
@@ -182,6 +207,8 @@ fun SettingsScreen(
                 return@launch
             }
             NotificationScheduler.cancelAll(context.applicationContext)
+            // Progress photos only live on this phone, so they go too
+            com.example.apexfitness.ui.body.ProgressPhotoStore.deleteAll(context.applicationContext)
             authService.signOut()
             navController.navigate("welcome") {
                 popUpTo(navController.graph.id) { inclusive = true }
@@ -405,6 +432,19 @@ fun SettingsScreen(
                             deleteError = null
                             showDeleteDialog = true
                         }
+                    )
+                }
+            }
+
+            SettingsSection(
+                label = "Data",
+                modifier = Modifier.staggeredEntrance(index = 3, key = "settings-data")
+            ) {
+                SettingsCard(glassState = glassState) {
+                    SettingsNavRow(
+                        icon = Icons.Outlined.FileDownload,
+                        title = if (exporting) "Preparing file..." else "Export workout history (CSV)",
+                        onClick = { exportWorkouts() }
                     )
                 }
             }

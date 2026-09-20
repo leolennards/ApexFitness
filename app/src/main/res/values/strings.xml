@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">ApexFitness</string>
+    <string name="shortcut_workout_short">Start workout</string>
+    <string name="shortcut_workout_long">Start a workout</string>
+    <string name="shortcut_water_short">Log water</string>
+    <string name="shortcut_water_long">Log water</string>
+    <string name="widget_description">Quick links to start a workout or log water</string>
+    <string name="widget_title">ApexFitness</string>
+    <string name="widget_subtitle">Ready to train?</string>
+    <string name="widget_workout">Workout</string>
+    <string name="widget_water">Water</string>
 </resources>

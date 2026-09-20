@@ -100,6 +100,9 @@ import com.example.apexfitness.ui.challenges.ChallengesScreen
 import com.example.apexfitness.ui.water.WaterTrackingScreen
 import com.example.apexfitness.ui.cardio.CardioTrackingScreen
 import com.example.apexfitness.ui.welcome.WelcomeScreen
+import com.example.apexfitness.ui.Workout.WorkoutSummaryScreen
+import com.example.apexfitness.ui.body.BodyTrackingScreen
+import com.example.apexfitness.ui.body.ProgressPhotosScreen
 import kotlinx.coroutines.launch
 
 import com.example.apexfitness.ui.authentication.register.GetStartedScreen
@@ -113,6 +116,11 @@ import com.example.apexfitness.ui.routines.RoutineListScreen
 import com.example.apexfitness.ui.routines.CreateEditRoutineScreen
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        // Shortcuts and the home screen widget send the screen to open in this extra
+        const val EXTRA_DESTINATION = "apex_destination"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -128,6 +136,8 @@ class MainActivity : ComponentActivity() {
         NotificationPreferences.init(applicationContext)
         UnitPreferences.init(applicationContext)
         NotificationScheduler.createChannel(applicationContext)
+        // Only on a fresh start, so rotating the phone does not open the screen again
+        val launchDestination = if (savedInstanceState == null) intent?.getStringExtra(EXTRA_DESTINATION) else null
         setContent {
             val isDarkMode by ThemePreferences.isDarkMode.collectAsState()
             val notificationsEnabled by NotificationPreferences.enabled.collectAsState()
@@ -139,6 +149,13 @@ class MainActivity : ComponentActivity() {
                 val onboardingFormState = remember { OnboardingFormState() }
                 val startDestination = remember {
                     if (AuthService(applicationContext).getCurrentUser() != null) "main" else "welcome"
+                }
+
+                // A shortcut or widget button can open a screen straight away, for a signed in user only
+                LaunchedEffect(Unit) {
+                    if (launchDestination != null && launchDestination != "main" && startDestination == "main") {
+                        runCatching { navController.navigate(launchDestination) }
+                    }
                 }
 
                 // Screen transitions: fade plus a small slide. Everything is instant if system animations are off.
@@ -249,6 +266,15 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("cardio") {
                                 CardioTrackingScreen(navController = navController)
+                            }
+                            composable("workoutSummary") {
+                                WorkoutSummaryScreen(navController = navController)
+                            }
+                            composable("bodyProgress") {
+                                BodyTrackingScreen(navController = navController)
+                            }
+                            composable("progressPhotos") {
+                                ProgressPhotosScreen(navController = navController)
                             }
                         }
                     }
@@ -426,6 +452,8 @@ fun MainScreen(navController: NavHostController? = null) {
                         onOpenAchievements = { navController?.navigate("achievements") },
                         onOpenChallenges = { navController?.navigate("challenges") },
                         onOpenCardio = { navController?.navigate("cardio") },
+                        onOpenBody = { navController?.navigate("bodyProgress") },
+                        onOpenPhotos = { navController?.navigate("progressPhotos") },
                         onShareApp = {
                             val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                 type = "text/plain"

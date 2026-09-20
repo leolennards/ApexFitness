@@ -42,6 +42,7 @@ object FirestoreRepository {
     private fun challengesCol(uid: String) = userDoc(uid).collection("challenges")
     private fun waterLogsCol(uid: String) = userDoc(uid).collection("waterLogs")
     private fun cardioLogsCol(uid: String) = userDoc(uid).collection("cardioLogs")
+    private fun bodyCol(uid: String) = userDoc(uid).collection("bodyEntries")
 
     private fun todayDateKey(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
@@ -49,7 +50,7 @@ object FirestoreRepository {
     suspend fun deleteAllUserData(uid: String): Unit = withTimeout(30000) {
         val collections = listOf(
             routinesCol(uid), logsCol(uid), prCol(uid),
-            challengesCol(uid), waterLogsCol(uid), cardioLogsCol(uid)
+            challengesCol(uid), waterLogsCol(uid), cardioLogsCol(uid), bodyCol(uid)
         )
         for (col in collections) {
             val docs = col.get().await().documents
@@ -140,6 +141,12 @@ object FirestoreRepository {
         return docRef.id
     }
 
+    // Every workout, oldest first (used for the CSV export)
+    suspend fun getAllWorkoutLogs(uid: String): List<WorkoutLog> {
+        val snap = logsCol(uid).orderBy("dateMillis", Query.Direction.ASCENDING).get().await()
+        return snap.documents.mapNotNull { doc -> doc.toObject(WorkoutLog::class.java)?.copy(id = doc.id) }
+    }
+
     // Personal records
 
     fun observePersonalRecords(uid: String): Flow<List<PersonalRecord>> = callbackFlow {
@@ -150,8 +157,9 @@ object FirestoreRepository {
         awaitClose { registration.remove() }
     }
 
-    // Only updates the record if the new result beats the old one (weight first, then reps)
-    suspend fun upsertPersonalRecordIfBetter(uid: String, exerciseName: String, weight: Double, reps: Int) {
+    // Only updates the record if the new result beats the old one (weight first, then reps).
+    // Returns true when it beat an earlier record (a first ever result does not count).
+    suspend fun upsertPersonalRecordIfBetter(uid: String, exerciseName: String, weight: Double, reps: Int): Boolean {
         val slug = slugify(exerciseName)
         val ref = prCol(uid).document(slug)
         val existing = ref.get().await().toObject(PersonalRecord::class.java)
@@ -167,6 +175,7 @@ object FirestoreRepository {
                 )
             ).awaitWrite()
         }
+        return isBetter && existing != null
     }
 
     // Challenges
@@ -258,5 +267,30 @@ object FirestoreRepository {
 
     suspend fun deleteCardioLog(uid: String, logId: String) {
         cardioLogsCol(uid).document(logId).delete().awaitWrite()
+    }
+
+    // Body check-ins
+
+    fun observeBodyEntries(uid: String, limit: Long = 365): Flow<List<BodyEntry>> = callbackFlow {
+        val registration = bodyCol(uid)
+            .orderBy("dateMillis", Query.Direction.DESCENDING)
+            .limit(limit)
+            .addSnapshotListener { snapshot, _ ->
+                val entries = snapshot?.documents?.mapNotNull { doc ->
+                    doc.toObject(BodyEntry::class.java)?.copy(id = doc.id)
+                }.orEmpty()
+                trySend(entries)
+            }
+        awaitClose { registration.remove() }
+    }
+
+    suspend fun addBodyEntry(uid: String, entry: BodyEntry): String {
+        val docRef = bodyCol(uid).document()
+        docRef.set(entry.copy(id = docRef.id)).awaitWrite()
+        return docRef.id
+    }
+
+    suspend fun deleteBodyEntry(uid: String, entryId: String) {
+        bodyCol(uid).document(entryId).delete().awaitWrite()
     }
 }

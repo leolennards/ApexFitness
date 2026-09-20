@@ -24,7 +24,7 @@
 <h2>What the app collects</h2>
 <ul>
   <li><strong>Account details:</strong> your name and email address, and your sign-in method (email and password, or Google). Passwords are handled by Firebase Authentication and are never visible to me.</li>
-  <li><strong>Fitness information you enter:</strong> your fitness level, goals, workout schedule, weight, routines, workout logs, personal records, challenges, water and cardio logs.</li>
+  <li><strong>Fitness information you enter:</strong> your fitness level, goals, workout schedule, weight, routines, workout logs, personal records, challenges, water and cardio logs, and body weight and measurements if you choose to log them.</li>
   <li><strong>Basic usage data:</strong> the app uses Firebase Analytics, which collects anonymous information about how the app is used and about your device, such as the app version and device model.</li>
 </ul>
 
@@ -33,6 +33,9 @@
 
 <h2>Where it is stored</h2>
 <p>Your data is stored with Google Firebase (Authentication, Cloud Firestore and Analytics). Each person's data is kept under their own account, and the database rules only let a signed-in user read and write their own data. Google processes this data on its servers under its own privacy terms.</p>
+
+<h2>Progress photos and exports</h2>
+<p>Progress photos you add are stored only on your phone, in the app's private storage. They are never uploaded to Firebase or anywhere else. They may be included in your phone's own backup if you have Android device backup turned on. Deleting your account also deletes these photos from the phone. If you export your workout history or share a workout summary, the file goes only where you choose to send it.</p>
 
 <h2>Notifications</h2>
 <p>If you turn on workout reminders, the app schedules notifications on your phone. These are local to your device and no information is sent anywhere to create them.</p>
