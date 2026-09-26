@@ -104,6 +104,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     var restTotalSeconds by remember { mutableStateOf(0) }
     var isRestPaused by remember { mutableStateOf(false) }
     var restTimerJob by remember { mutableStateOf<Job?>(null) }
+    var restPromptSeconds by remember { mutableStateOf<Int?>(null) }
     val startTimeMillis = remember { System.currentTimeMillis() }
     // What the user did last time and their best, by exercise name (lowercase)
     var history by remember { mutableStateOf<Map<String, ExerciseHistory>>(emptyMap()) }
@@ -302,11 +303,14 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                             history = history,
                             onClose = { navController.popBackStack() },
                             onFinish = { finishWorkout() },
-                            onSetCompleted = { session -> startRestTimer(session.exercise.restSeconds) },
+                            onSetCompleted = { session -> restPromptSeconds = session.exercise.restSeconds },
                             onPauseResume = { pauseResumeRestTimer() },
                             onSkip = { skipRestTimer() },
                             onAdjust = { delta -> adjustRestTimer(delta) },
-                            onPreset = { seconds -> startRestTimer(seconds) }
+                            onPreset = { seconds -> startRestTimer(seconds) },
+                            restPromptSeconds = restPromptSeconds,
+                            onStartRestPrompt = { seconds -> restPromptSeconds = null; startRestTimer(seconds) },
+                            onDismissRestPrompt = { restPromptSeconds = null }
                         )
                     }
                 }
@@ -331,7 +335,10 @@ private fun SessionBody(
     onPauseResume: () -> Unit,
     onSkip: () -> Unit,
     onAdjust: (Int) -> Unit,
-    onPreset: (Int) -> Unit
+    onPreset: (Int) -> Unit,
+    restPromptSeconds: Int? = null,
+    onStartRestPrompt: (Int) -> Unit = {},
+    onDismissRestPrompt: () -> Unit = {}
 ) {
     val motionEnabled = LocalMotionEnabled.current
     val totalSets = sessionExercises.sumOf { it.sets.size }
@@ -397,6 +404,25 @@ private fun SessionBody(
                 onSkip = onSkip,
                 onAdjust = onAdjust,
                 onPreset = onPreset
+            )
+        }
+
+        // Shown after a set is ticked off. Rest never starts on its own - the user chooses when.
+        AnimatedVisibility(
+            visible = restPromptSeconds != null && restSecondsLeft <= 0,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = Dimens.ScreenEdge, end = Dimens.ScreenEdge, bottom = Dimens.Space3),
+            enter = fadeIn(apexTween(motionEnabled, Motion.Standard)) +
+                slideInVertically(apexSpring(motionEnabled)) { it / 3 },
+            exit = fadeOut(apexTween(motionEnabled, Motion.Micro + 30)) +
+                slideOutVertically(apexSpring(motionEnabled)) { it / 3 }
+        ) {
+            RestPromptBar(
+                seconds = restPromptSeconds ?: 0,
+                glassState = glassState,
+                onStart = { onStartRestPrompt(restPromptSeconds ?: 0) },
+                onDismiss = onDismissRestPrompt
             )
         }
     }
@@ -510,6 +536,58 @@ private fun triggerRestCompleteFeedback(haptics: Haptics) {
         toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP2, 400)
     }
     haptics.soft()
+}
+
+// A calm prompt after a set is completed - rest starts only when the user taps Start.
+@Composable
+private fun RestPromptBar(
+    seconds: Int,
+    glassState: com.example.apexfitness.ui.theme.GlassState,
+    onStart: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val contentColor = glassContentColor()
+    val mutedColor = glassMutedContentColor()
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .glassPanel(glassState, shape = CardShape)
+            .padding(horizontal = Dimens.Space3, vertical = Dimens.Space2),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Nice set!",
+                style = MaterialTheme.typography.labelMedium,
+                color = mutedColor
+            )
+            Text(
+                text = "Rest for ${formatRestTime(seconds)}?",
+                style = MaterialTheme.typography.titleMedium,
+                color = contentColor
+            )
+        }
+
+        Spacer(modifier = Modifier.width(Dimens.Space2))
+
+        TextButton(onClick = onDismiss) {
+            Text("Not now")
+        }
+
+        Spacer(modifier = Modifier.width(Dimens.Space1))
+
+        Button(
+            onClick = onStart,
+            modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+        ) {
+            Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(Dimens.Space1))
+            Text("Start rest")
+        }
+    }
 }
 
 @Composable
