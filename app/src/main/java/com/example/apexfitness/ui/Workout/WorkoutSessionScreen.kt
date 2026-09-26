@@ -44,6 +44,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -344,10 +345,16 @@ private fun SessionBody(
     val totalSets = sessionExercises.sumOf { it.sets.size }
     val doneSets = sessionExercises.sumOf { exercise -> exercise.sets.count { it.completed } }
     val sessionProgress = if (totalSets == 0) 0f else doneSets.toFloat() / totalSets.toFloat()
+    val totalExercises = sessionExercises.size
+    // The exercise with the next set to do. -1 once everything is checked off.
+    val currentExerciseIndex = sessionExercises.indexOfFirst { session -> session.sets.any { !it.completed } }
+    val currentExerciseNumber = if (currentExerciseIndex >= 0) currentExerciseIndex + 1 else totalExercises
     val statusLabel = when {
         restSecondsLeft > 0 && isRestPaused -> "REST PAUSED"
         restSecondsLeft > 0 -> "RESTING"
-        else -> "$doneSets OF $totalSets SETS"
+        totalExercises == 0 -> "NO EXERCISES"
+        currentExerciseIndex < 0 -> "ALL DONE  ·  $doneSets OF $totalSets SETS"
+        else -> "EXERCISE $currentExerciseNumber OF $totalExercises  ·  $doneSets OF $totalSets SETS"
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -364,11 +371,15 @@ private fun SessionBody(
         ) {
             items(sessionExercises.size) { index ->
                 val session = sessionExercises[index]
+                val isDone = session.sets.isNotEmpty() && session.sets.all { it.completed }
+                val isCurrent = !isDone && index == currentExerciseIndex
                 SessionExerciseCard(
                     session = session,
                     glassState = glassState,
                     history = history[session.exercise.name.trim().lowercase()],
                     onSetCompleted = { onSetCompleted(session) },
+                    isCurrent = isCurrent,
+                    isDone = isDone,
                     modifier = Modifier.staggeredEntrance(index)
                 )
             }
@@ -781,13 +792,35 @@ private fun RestTimerIconButton(
     }
 }
 
+// Small "CURRENT" / "DONE" label shown on an exercise card during a workout
+@Composable
+private fun ExerciseStatusPill(text: String, accent: Boolean) {
+    val accentColor = MaterialTheme.apex.accent
+    val mutedColor = glassMutedContentColor()
+    Box(
+        modifier = Modifier
+            .clip(PillShape)
+            .background(if (accent) MaterialTheme.apex.accentSoft else Color.Transparent)
+            .border(Dimens.Hairline, if (accent) accentColor else MaterialTheme.apex.hairline, PillShape)
+            .padding(horizontal = Dimens.Space2, vertical = 4.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (accent) MaterialTheme.apex.accentText else mutedColor
+        )
+    }
+}
+
 @Composable
 private fun SessionExerciseCard(
     session: ExerciseSession,
     glassState: com.example.apexfitness.ui.theme.GlassState,
     onSetCompleted: () -> Unit,
     modifier: Modifier = Modifier,
-    history: ExerciseHistory? = null
+    history: ExerciseHistory? = null,
+    isCurrent: Boolean = false,
+    isDone: Boolean = false
 ) {
     val contentColor = glassContentColor()
     val mutedColor = glassMutedContentColor()
@@ -808,13 +841,34 @@ private fun SessionExerciseCard(
         history?.best?.takeIf { it.bestWeight > 0 || it.bestReps > 0 }?.let { add("Best: ${describe(it.bestWeight, it.bestReps)}") }
     }
 
+    val accentColor = MaterialTheme.apex.accent
     Column(
         modifier = modifier
             .fillMaxWidth()
             .glassPanel(glassState, shape = CardShape)
+            .then(
+                if (isCurrent) {
+                    Modifier.border(1.dp, accentColor, CardShape)
+                } else {
+                    Modifier
+                }
+            )
+            .alpha(if (isDone) 0.6f else 1f)
             .padding(Dimens.Space3)
     ) {
-        Text(text = session.exercise.name, style = MaterialTheme.typography.titleLarge, color = contentColor)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = session.exercise.name,
+                style = MaterialTheme.typography.titleLarge,
+                color = contentColor,
+                modifier = Modifier.weight(1f)
+            )
+            if (isDone) {
+                ExerciseStatusPill(text = "DONE", accent = false)
+            } else if (isCurrent) {
+                ExerciseStatusPill(text = "CURRENT", accent = true)
+            }
+        }
         if (tip != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
