@@ -411,6 +411,8 @@ private fun SessionBody(
         currentExerciseIndex < 0 -> "ALL DONE  ·  $doneSets OF $totalSets SETS"
         else -> "EXERCISE $currentExerciseNumber OF $totalExercises  ·  $doneSets OF $totalSets SETS"
     }
+    var showDiscardConfirm by remember { mutableStateOf(false) }
+    var showFinishConfirm by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // The body scrolls underneath the header
@@ -455,8 +457,8 @@ private fun SessionBody(
             statusLabel = statusLabel,
             progress = sessionProgress,
             isSaving = isSaving,
-            onClose = onClose,
-            onFinish = onFinish,
+            onClose = { if (doneSets > 0) showDiscardConfirm = true else onClose() },
+            onFinish = { if (totalSets > 0 && doneSets < totalSets) showFinishConfirm = true else onFinish() },
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
@@ -501,6 +503,84 @@ private fun SessionBody(
                 onDismiss = onDismissRestPrompt
             )
         }
+    }
+
+    // A stray tap on Close should not silently wipe a workout that is already underway.
+    if (showDiscardConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = ApexShapes.large,
+            title = {
+                Text(
+                    text = "Discard this workout?",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "You have logged $doneSets of $totalSets sets. Leaving now throws that away.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.apex.mutedText
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showDiscardConfirm = false; onClose() },
+                    modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+                ) {
+                    Text(text = "Discard", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.apex.errorText)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDiscardConfirm = false },
+                    modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+                ) {
+                    Text(text = "Keep training", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        )
+    }
+
+    // Finishing with sets still unchecked is often a mistake made in a hurry, so double check.
+    if (showFinishConfirm) {
+        AlertDialog(
+            onDismissRequest = { showFinishConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = ApexShapes.large,
+            title = {
+                Text(
+                    text = "Finish with sets left?",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "You have ${totalSets - doneSets} unchecked sets. You can still finish and save what you did.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.apex.mutedText
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showFinishConfirm = false; onFinish() },
+                    modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+                ) {
+                    Text(text = "Finish anyway", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.apex.accentText)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showFinishConfirm = false },
+                    modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+                ) {
+                    Text(text = "Keep training", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        )
     }
 }
 
