@@ -95,6 +95,31 @@ object RoutineTemplates {
                 Triple("Hanging Leg Raises", 3, "10"),
                 Triple("Cable Crunch", 3, "15")
             )
+        ),
+        RoutineTemplate(
+            name = "Lower Body",
+            description = "Quads, hamstrings and glutes - pairs well with Upper Body",
+            iconKey = "dumbbell",
+            exercises = listOf(
+                Triple("Squats", 3, "8"),
+                Triple("Romanian Deadlift", 3, "10"),
+                Triple("Bulgarian Split Squat", 3, "10"),
+                Triple("Hip Thrust", 3, "12"),
+                Triple("Calf Raises", 3, "15")
+            )
+        ),
+        RoutineTemplate(
+            name = "Home Workout",
+            description = "No equipment needed - just your body weight",
+            iconKey = "yoga",
+            exercises = listOf(
+                Triple("Bodyweight Squats", 3, "15"),
+                Triple("Push-ups", 3, "10"),
+                Triple("Inverted Rows", 3, "10"),
+                Triple("Glute Bridges", 3, "15"),
+                Triple("Plank", 3, "30"),
+                Triple("Burpees", 3, "10")
+            )
         )
     )
 }

@@ -61,7 +61,17 @@ object ExerciseInfo {
         "Rowing Machine" to ExerciseTip("Legs, back, arms", "Drive with your legs first, then lean back, then pull the handle to your chest. Reverse the order on the way back."),
         "Jump Rope" to ExerciseTip("Calves, shoulders, heart", "Stay on the balls of your feet and turn the rope with your wrists. Jump only high enough to clear it."),
         "Stair Climber" to ExerciseTip("Legs, glutes", "Stand tall and place your whole foot on each step. Avoid leaning on the rails."),
-        "Elliptical" to ExerciseTip("Legs, heart", "Keep your posture upright and push and pull the handles evenly. Adjust the resistance to keep a steady effort.")
+        "Elliptical" to ExerciseTip("Legs, heart", "Keep your posture upright and push and pull the handles evenly. Adjust the resistance to keep a steady effort."),
+        "Sled Push" to ExerciseTip("Legs, glutes, heart", "Keep a slight forward lean and drive through your legs in short, powerful steps. Keep your arms mostly locked out."),
+        "Battle Ropes" to ExerciseTip("Shoulders, arms, heart", "Keep a slight knee bend and whip the ropes in steady waves. Keep your core tight throughout."),
+        // Bodyweight
+        "Burpees" to ExerciseTip("Full body, heart", "Drop into a squat, kick back into a plank, then jump back in and explode upward. Keep a steady pace you can sustain."),
+        "Wall Sit" to ExerciseTip("Quads", "Slide down a wall until your knees are at about 90 degrees and hold. Keep your back flat against the wall."),
+        "Step-ups" to ExerciseTip("Quads, glutes", "Step fully onto a sturdy box or bench, driving through the lead foot until your leg is straight. Step down under control."),
+        "Glute Bridges" to ExerciseTip("Glutes, hamstrings", "Lie on your back with your knees bent and drive your hips up, squeezing your glutes at the top. Lower slowly."),
+        "Bodyweight Squats" to ExerciseTip("Quads, glutes", "Keep your chest up and sit your hips back and down until your thighs are at least parallel, then stand tall."),
+        "Inverted Rows" to ExerciseTip("Back, biceps", "Hang under a bar or rings with your body straight and pull your chest up to it. Keep your body rigid throughout."),
+        "Diamond Push-ups" to ExerciseTip("Triceps, chest", "Form a diamond shape with your hands under your chest and lower down. Keep your elbows close to your body.")
     ).mapKeys { it.key.lowercase() }
 
     fun find(exerciseName: String): ExerciseTip? = tips[exerciseName.trim().lowercase()]
