@@ -984,7 +984,6 @@ private fun WorkoutGlossaryCard(
     }
 }
 
-@Composable
 // Small "CURRENT" / "DONE" label shown on an exercise card during a workout
 @Composable
 private fun ExerciseStatusPill(text: String, accent: Boolean) {
