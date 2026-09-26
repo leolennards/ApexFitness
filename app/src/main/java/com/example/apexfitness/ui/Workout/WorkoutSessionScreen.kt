@@ -28,6 +28,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -413,11 +414,21 @@ private fun SessionBody(
     }
     var showDiscardConfirm by remember { mutableStateOf(false) }
     var showFinishConfirm by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    // Jumps to whichever exercise is next, so finishing one doesn't leave you hunting
+    // for the next one in a long routine.
+    LaunchedEffect(currentExerciseIndex, showGlossary) {
+        if (currentExerciseIndex >= 0) {
+            val itemIndex = currentExerciseIndex + if (showGlossary) 1 else 0
+            listState.animateScrollToItem(itemIndex)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // The body scrolls underneath the header
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(
                 start = Dimens.ScreenEdge,
                 top = 96.dp,
