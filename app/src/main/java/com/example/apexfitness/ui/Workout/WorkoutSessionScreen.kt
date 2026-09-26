@@ -827,7 +827,12 @@ private fun SessionExerciseCard(
     val haptics = rememberHaptics()
     val useLbs = UnitPreferences.useLbs.collectAsState().value
     val tip = remember(session.exercise.name) { ExerciseInfo.find(session.exercise.name) }
-    var showTip by remember { mutableStateOf(false) }
+    // Auto-open the form tip for whichever exercise you're currently on, since that's the one
+    // a beginner actually needs guidance for right now. Still collapsible by hand.
+    var showTip by remember { mutableStateOf(isCurrent) }
+    LaunchedEffect(isCurrent) {
+        if (isCurrent) showTip = true
+    }
 
     // "80 kg x 8" for a weighted set, "12 reps" for bodyweight
     fun describe(weightKg: Double, reps: Int): String =

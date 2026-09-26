@@ -240,23 +240,37 @@ fun RoutineListScreen(navController: NavHostController, previewRoutines: List<Ro
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(Dimens.Space1)
                 ) {
-                    RoutineTemplates.all.forEach { template ->
+                    RoutineTemplates.all.sortedByDescending { it.beginnerFriendly }.forEach { template ->
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(ApexShapes.small)
-                                .border(Dimens.Hairline, MaterialTheme.apex.hairline, ApexShapes.small)
+                                .border(
+                                    Dimens.Hairline,
+                                    if (template.beginnerFriendly) MaterialTheme.apex.accent else MaterialTheme.apex.hairline,
+                                    ApexShapes.small
+                                )
                                 .apexClickable {
                                     addTemplate(template)
                                     showTemplates = false
                                 }
                                 .padding(Dimens.Space2)
                         ) {
-                            Text(
-                                text = template.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = template.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (template.beginnerFriendly) {
+                                    Text(
+                                        text = "NEW HERE? START HERE",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.apex.accentText
+                                    )
+                                }
+                            }
                             Text(
                                 text = "${template.description} - ${template.exercises.size} exercises",
                                 style = MaterialTheme.typography.bodySmall,

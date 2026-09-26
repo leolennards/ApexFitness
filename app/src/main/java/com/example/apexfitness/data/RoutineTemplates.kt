@@ -6,7 +6,9 @@ data class RoutineTemplate(
     val description: String,
     val iconKey: String,
     // Exercise name, sets, reps
-    val exercises: List<Triple<String, Int, String>>
+    val exercises: List<Triple<String, Int, String>>,
+    // Shown first, with a "Recommended for beginners" badge, in the template picker
+    val beginnerFriendly: Boolean = false
 ) {
     // Builds a real routine from the template. It has no days, so the user picks those later.
     fun toRoutine(): Routine = Routine(
@@ -59,7 +61,7 @@ object RoutineTemplates {
         ),
         RoutineTemplate(
             name = "Full Body",
-            description = "One session that covers everything",
+            description = "One session that covers everything - a great first routine",
             iconKey = "dumbbell",
             exercises = listOf(
                 Triple("Squats", 3, "8"),
@@ -67,7 +69,8 @@ object RoutineTemplates {
                 Triple("Barbell Row", 3, "8"),
                 Triple("Overhead Press", 3, "10"),
                 Triple("Plank", 3, "45")
-            )
+            ),
+            beginnerFriendly = true
         ),
         RoutineTemplate(
             name = "Upper Body",
