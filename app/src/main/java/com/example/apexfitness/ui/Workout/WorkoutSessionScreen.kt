@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.SkipNext
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -64,6 +65,7 @@ import com.example.apexfitness.data.LoggedExercise
 import com.example.apexfitness.data.LoggedSet
 import com.example.apexfitness.data.Routine
 import com.example.apexfitness.data.RoutineExercise
+import com.example.apexfitness.ui.routines.ExercisePickerDialog
 import com.example.apexfitness.data.StatsCalculations
 import com.example.apexfitness.data.WorkoutLog
 import com.example.apexfitness.ui.authentication.AuthService
@@ -84,7 +86,9 @@ class SetEntry(reps: String, weight: String) {
     var completed by mutableStateOf(false)
 }
 
-class ExerciseSession(val exercise: RoutineExercise, val sets: SnapshotStateList<SetEntry>)
+class ExerciseSession(exercise: RoutineExercise, val sets: SnapshotStateList<SetEntry>) {
+    var exercise by mutableStateOf(exercise)
+}
 
 // Rest times offered in the rest timer, in seconds
 private val RestTimerPresets = listOf(30, 60, 90, 120)
@@ -108,6 +112,8 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     var restTimerJob by remember { mutableStateOf<Job?>(null) }
     var restPromptSeconds by remember { mutableStateOf<Int?>(null) }
     var showGlossary by remember { mutableStateOf(!OnboardingPreferences.hasSeenWorkoutGlossary(context)) }
+    var favoriteExerciseNames by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var swapTargetIndex by remember { mutableStateOf<Int?>(null) }
     val startTimeMillis = remember { System.currentTimeMillis() }
     // What the user did last time and their best, by exercise name (lowercase)
     var history by remember { mutableStateOf<Map<String, ExerciseHistory>>(emptyMap()) }
@@ -158,6 +164,29 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
             }
             map
         }.onSuccess { history = it }
+    }
+
+    LaunchedEffect(uid) {
+        val id = uid ?: return@LaunchedEffect
+        runCatching { FirestoreRepository.getProfile(id)?.favoriteExerciseNames?.toSet() ?: emptySet() }
+            .onSuccess { favoriteExerciseNames = it }
+    }
+
+    // Lets someone swap in an exercise from the library without leaving the workout,
+    // e.g. when a machine is taken. Keeps the same target sets/reps/rest, just a new name.
+    fun toggleFavoriteExercise(exerciseName: String) {
+        val updated = if (favoriteExerciseNames.contains(exerciseName)) {
+            favoriteExerciseNames - exerciseName
+        } else {
+            favoriteExerciseNames + exerciseName
+        }
+        favoriteExerciseNames = updated
+        val currentUid = uid
+        if (currentUid != null) {
+            coroutineScope.launch {
+                runCatching { FirestoreRepository.updateProfileFields(currentUid, mapOf("favoriteExerciseNames" to updated.toList())) }
+            }
+        }
     }
 
     fun startRestTimer(seconds: Int) {
@@ -307,6 +336,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                             onClose = { navController.popBackStack() },
                             onFinish = { finishWorkout() },
                             onSetCompleted = { session -> restPromptSeconds = session.exercise.restSeconds },
+                            onSwapRequested = { index -> swapTargetIndex = index },
                             onPauseResume = { pauseResumeRestTimer() },
                             onSkip = { skipRestTimer() },
                             onAdjust = { delta -> adjustRestTimer(delta) },
@@ -324,6 +354,21 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                 }
             }
         }
+
+        if (swapTargetIndex != null) {
+            ExercisePickerDialog(
+                favoriteExerciseNames = favoriteExerciseNames,
+                onToggleFavorite = ::toggleFavoriteExercise,
+                onDismiss = { swapTargetIndex = null },
+                onPick = { name ->
+                    val idx = swapTargetIndex
+                    if (idx != null && idx in sessionExercises.indices) {
+                        sessionExercises[idx].exercise = sessionExercises[idx].exercise.copy(name = name)
+                    }
+                    swapTargetIndex = null
+                }
+            )
+        }
     }
 }
 
@@ -340,6 +385,7 @@ private fun SessionBody(
     onClose: () -> Unit,
     onFinish: () -> Unit,
     onSetCompleted: (ExerciseSession) -> Unit,
+    onSwapRequested: (Int) -> Unit = {},
     onPauseResume: () -> Unit,
     onSkip: () -> Unit,
     onAdjust: (Int) -> Unit,
@@ -396,6 +442,7 @@ private fun SessionBody(
                     glassState = glassState,
                     history = history[session.exercise.name.trim().lowercase()],
                     onSetCompleted = { onSetCompleted(session) },
+                    onSwap = { onSwapRequested(index) },
                     isCurrent = isCurrent,
                     isDone = isDone,
                     modifier = Modifier.staggeredEntrance(index)
@@ -875,7 +922,8 @@ private fun SessionExerciseCard(
     modifier: Modifier = Modifier,
     history: ExerciseHistory? = null,
     isCurrent: Boolean = false,
-    isDone: Boolean = false
+    isDone: Boolean = false,
+    onSwap: () -> Unit = {}
 ) {
     val contentColor = glassContentColor()
     val mutedColor = glassMutedContentColor()
@@ -927,6 +975,20 @@ private fun SessionExerciseCard(
                 ExerciseStatusPill(text = "DONE", accent = false)
             } else if (isCurrent) {
                 ExerciseStatusPill(text = "CURRENT", accent = true)
+            }
+            Spacer(modifier = Modifier.width(Dimens.Space1))
+            Box(
+                modifier = Modifier
+                    .size(Dimens.MinTouchTarget)
+                    .apexClickable(onClick = onSwap),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.SwapHoriz,
+                    contentDescription = "Swap exercise",
+                    tint = mutedColor,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
         if (tip != null) {

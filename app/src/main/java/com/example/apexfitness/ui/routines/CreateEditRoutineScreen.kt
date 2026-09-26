@@ -728,7 +728,7 @@ private fun CompactTextField(label: String, value: String, onValueChange: (Strin
 // ---- Exercise picker ----
 
 @Composable
-private fun ExercisePickerDialog(
+internal fun ExercisePickerDialog(
     favoriteExerciseNames: Set<String>,
     onToggleFavorite: (String) -> Unit,
     onDismiss: () -> Unit,
