@@ -1,6 +1,7 @@
 package com.example.apexfitness.ui.Workout
 
 import com.example.apexfitness.ui.settings.UnitPreferences
+import com.example.apexfitness.ui.settings.OnboardingPreferences
 import android.media.AudioManager
 import android.media.ToneGenerator
 import androidx.compose.animation.AnimatedContent
@@ -106,6 +107,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     var isRestPaused by remember { mutableStateOf(false) }
     var restTimerJob by remember { mutableStateOf<Job?>(null) }
     var restPromptSeconds by remember { mutableStateOf<Int?>(null) }
+    var showGlossary by remember { mutableStateOf(!OnboardingPreferences.hasSeenWorkoutGlossary(context)) }
     val startTimeMillis = remember { System.currentTimeMillis() }
     // What the user did last time and their best, by exercise name (lowercase)
     var history by remember { mutableStateOf<Map<String, ExerciseHistory>>(emptyMap()) }
@@ -311,7 +313,12 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                             onPreset = { seconds -> startRestTimer(seconds) },
                             restPromptSeconds = restPromptSeconds,
                             onStartRestPrompt = { seconds -> restPromptSeconds = null; startRestTimer(seconds) },
-                            onDismissRestPrompt = { restPromptSeconds = null }
+                            onDismissRestPrompt = { restPromptSeconds = null },
+                            showGlossary = showGlossary,
+                            onDismissGlossary = {
+                                showGlossary = false
+                                OnboardingPreferences.setSeenWorkoutGlossary(context)
+                            }
                         )
                     }
                 }
@@ -339,7 +346,9 @@ private fun SessionBody(
     onPreset: (Int) -> Unit,
     restPromptSeconds: Int? = null,
     onStartRestPrompt: (Int) -> Unit = {},
-    onDismissRestPrompt: () -> Unit = {}
+    onDismissRestPrompt: () -> Unit = {},
+    showGlossary: Boolean = false,
+    onDismissGlossary: () -> Unit = {}
 ) {
     val motionEnabled = LocalMotionEnabled.current
     val totalSets = sessionExercises.sumOf { it.sets.size }
@@ -369,6 +378,15 @@ private fun SessionBody(
             ),
             verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
         ) {
+            if (showGlossary) {
+                item {
+                    WorkoutGlossaryCard(
+                        glassState = glassState,
+                        onDismiss = onDismissGlossary,
+                        modifier = Modifier.padding(bottom = Dimens.Space1)
+                    )
+                }
+            }
             items(sessionExercises.size) { index ->
                 val session = sessionExercises[index]
                 val isDone = session.sets.isNotEmpty() && session.sets.all { it.completed }
@@ -792,6 +810,43 @@ private fun RestTimerIconButton(
     }
 }
 
+// Shown once, the first time someone opens a workout, to explain the basic terms.
+@Composable
+private fun WorkoutGlossaryCard(
+    glassState: com.example.apexfitness.ui.theme.GlassState,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val contentColor = glassContentColor()
+    val mutedColor = glassMutedContentColor()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .glassPanel(glassState, shape = CardShape)
+            .padding(Dimens.Space3)
+    ) {
+        Text(
+            text = "New to this? Quick guide",
+            style = MaterialTheme.typography.titleMedium,
+            color = contentColor
+        )
+        Spacer(modifier = Modifier.height(Dimens.Space1))
+        Text(
+            text = "A SET is one round of an exercise. REPS is how many times you repeat the " +
+                "movement in that round. WEIGHT is how much you're lifting. After each set, " +
+                "you can start a short REST before the next one.",
+            style = MaterialTheme.typography.bodySmall,
+            color = mutedColor
+        )
+        Spacer(modifier = Modifier.height(Dimens.Space2))
+        TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+            Text("Got it")
+        }
+    }
+}
+
+@Composable
 // Small "CURRENT" / "DONE" label shown on an exercise card during a workout
 @Composable
 private fun ExerciseStatusPill(text: String, accent: Boolean) {
