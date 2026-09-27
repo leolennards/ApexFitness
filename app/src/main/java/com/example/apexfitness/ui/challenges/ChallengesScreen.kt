@@ -281,7 +281,7 @@ private fun ChallengeIcon(icon: ImageVector, done: Boolean = false, muted: Boole
     }
 }
 
-// Gold pill for the main button on a card
+// Accent pill for the main button on a card
 @Composable
 private fun ChallengePill(text: String, onClick: () -> Unit, filled: Boolean) {
     val apex = MaterialTheme.apex

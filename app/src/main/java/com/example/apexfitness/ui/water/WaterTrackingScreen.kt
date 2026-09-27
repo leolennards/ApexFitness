@@ -472,7 +472,7 @@ private fun WaterHistoryChart(history: List<WaterLog>, goalMl: Int, glassState: 
             }
         }
         Text(
-            text = "Full gold bars reached the daily goal",
+            text = "Full bars reached the daily goal",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.apex.mutedText,
             modifier = Modifier.padding(top = Dimens.Space1, start = 4.dp)

@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 
 // Text field styling shared by the sign in, sign up and onboarding forms.
-// Unfocused borders use the muted colour at 50% so they are easy to see, focused ones are gold.
+// Unfocused borders use the muted colour at 50% so they are easy to see, focused ones are accent.
 
 @Composable
 fun apexFieldColors(container: Color = MaterialTheme.colorScheme.surface) = OutlinedTextFieldDefaults.colors(

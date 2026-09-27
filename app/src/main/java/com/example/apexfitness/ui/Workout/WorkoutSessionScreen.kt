@@ -1164,7 +1164,7 @@ private fun SessionExerciseCard(
     }
 }
 
-// Set done toggle: 48dp tap area around a 30dp circle that turns gold when done
+// Set done toggle: 48dp tap area around a 30dp circle that turns accent when done
 @Composable
 private fun SetCheck(completed: Boolean, onToggle: () -> Unit) {
     val apex = MaterialTheme.apex

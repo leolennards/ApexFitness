@@ -16,149 +16,154 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.apexfitness.R
 
-// The only font is Manrope (Regular and SemiBold). Any other weight uses the closest of these two.
-val ManropeFamily = FontFamily(
-    Font(R.font.manrope_regular, FontWeight.Normal),
-    Font(R.font.manrope_semibold, FontWeight.SemiBold)
+// One font family, Archivo, in two widths.
+// Normal width (Regular and SemiBold) for body text, titles, labels and buttons.
+// Condensed SemiBold for big numbers and headlines, so they feel like a scoreboard or a watch face.
+val ArchivoFamily = FontFamily(
+    Font(R.font.archivo_regular, FontWeight.Normal),
+    Font(R.font.archivo_semibold, FontWeight.SemiBold)
+)
+val ArchivoCondensedFamily = FontFamily(
+    Font(R.font.archivo_condensed_semibold, FontWeight.SemiBold)
 )
 
 // One big element per screen, then smaller info. Numbers are big, labels are small and muted.
 val Typography = Typography(
     // Hero numbers
     displayLarge = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoCondensedFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 56.sp,
-        lineHeight = 60.sp,
-        letterSpacing = (-1.5).sp
+        fontSize = 60.sp,
+        lineHeight = 62.sp,
+        letterSpacing = (-0.5).sp
     ),
     displayMedium = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoCondensedFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 44.sp,
-        lineHeight = 48.sp,
-        letterSpacing = (-1).sp
+        fontSize = 48.sp,
+        lineHeight = 52.sp,
+        letterSpacing = (-0.5).sp
     ),
     displaySmall = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoCondensedFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 34.sp,
-        lineHeight = 40.sp,
-        letterSpacing = (-0.5).sp
+        fontSize = 38.sp,
+        lineHeight = 42.sp,
+        letterSpacing = (-0.25).sp
     ),
     // Headings
     headlineLarge = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoCondensedFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 30.sp,
-        lineHeight = 36.sp,
-        letterSpacing = (-0.5).sp
-    ),
-    headlineMedium = TextStyle(
-        fontFamily = ManropeFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 26.sp,
-        lineHeight = 32.sp,
+        fontSize = 34.sp,
+        lineHeight = 38.sp,
         letterSpacing = (-0.25).sp
     ),
-    headlineSmall = TextStyle(
-        fontFamily = ManropeFamily,
+    headlineMedium = TextStyle(
+        fontFamily = ArchivoCondensedFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 22.sp,
+        fontSize = 30.sp,
+        lineHeight = 34.sp,
+        letterSpacing = 0.sp
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = ArchivoCondensedFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 24.sp,
         lineHeight = 28.sp,
         letterSpacing = 0.sp
     ),
     titleLarge = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 20.sp,
         lineHeight = 26.sp,
         letterSpacing = 0.sp
     ),
     titleMedium = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 22.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.sp
     ),
     titleSmall = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.sp
     ),
     bodyLarge = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.sp
     ),
     bodyMedium = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.sp
     ),
     bodySmall = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.2.sp
+        letterSpacing = 0.1.sp
     ),
     // Buttons
     labelLarge = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 15.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.2.sp
+        letterSpacing = 0.1.sp
     ),
     // Small labels under a big number
     labelMedium = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.8.sp
+        letterSpacing = 0.9.sp
     ),
     labelSmall = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 11.sp,
         lineHeight = 16.sp,
-        letterSpacing = 1.sp
+        letterSpacing = 1.1.sp
     )
 )
 
 // Extra number styles. Tabular figures stop the digits from jumping while they count.
 object ApexText {
     val HeroNumeral = TextStyle(
-        fontFamily = ManropeFamily,
+        fontFamily = ArchivoCondensedFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 64.sp,
-        lineHeight = 68.sp,
-        letterSpacing = (-2).sp,
-        fontFeatureSettings = "tnum"
-    )
-    val Numeral = TextStyle(
-        fontFamily = ManropeFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 40.sp,
-        lineHeight = 44.sp,
+        fontSize = 72.sp,
+        lineHeight = 74.sp,
         letterSpacing = (-1).sp,
         fontFeatureSettings = "tnum"
     )
-    val NumeralSmall = TextStyle(
-        fontFamily = ManropeFamily,
+    val Numeral = TextStyle(
+        fontFamily = ArchivoCondensedFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 28.sp,
+        fontSize = 44.sp,
+        lineHeight = 48.sp,
         letterSpacing = (-0.5).sp,
+        fontFeatureSettings = "tnum"
+    )
+    val NumeralSmall = TextStyle(
+        fontFamily = ArchivoCondensedFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 26.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.25).sp,
         fontFeatureSettings = "tnum"
     )
 }

@@ -571,7 +571,7 @@ fun BottomNavigationBar(
     val selectedTint = MaterialTheme.apex.accentText
     val mutedTint = MaterialTheme.apex.mutedText
 
-    // Simple tab bar: solid background, one thin line on top, active tab is gold
+    // Simple tab bar: solid background, one thin line on top, active tab is accent
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp,

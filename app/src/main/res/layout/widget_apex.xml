@@ -13,7 +13,7 @@
         android:letterSpacing="0.2"
         android:text="@string/widget_title"
         android:textAllCaps="true"
-        android:textColor="#FFD4B27A"
+        android:textColor="#FFF0663F"
         android:textSize="11sp"
         android:textStyle="bold" />
 
@@ -23,7 +23,7 @@
         android:layout_weight="1"
         android:gravity="center_vertical"
         android:text="@string/widget_subtitle"
-        android:textColor="#FFF4F1EA"
+        android:textColor="#FFF2F1EE"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -41,7 +41,7 @@
             android:background="@drawable/widget_pill_gold"
             android:gravity="center"
             android:text="@string/widget_workout"
-            android:textColor="#FF0E0E11"
+            android:textColor="#FF0C0D0F"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -53,7 +53,7 @@
             android:background="@drawable/widget_pill_outline"
             android:gravity="center"
             android:text="@string/widget_water"
-            android:textColor="#FFD4B27A"
+            android:textColor="#FFF0663F"
             android:textSize="14sp"
             android:textStyle="bold" />
     </LinearLayout>

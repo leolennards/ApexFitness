@@ -217,7 +217,7 @@ fun OnboardingStepHeader(step: Int, total: Int, onBack: () -> Unit, modifier: Mo
     }
 }
 
-// Tappable option card for single or multiple choice. Selected cards get a gold border and a check.
+// Tappable option card for single or multiple choice. Selected cards get a accent border and a check.
 @Composable
 fun SelectableOptionCard(
     icon: ImageVector,

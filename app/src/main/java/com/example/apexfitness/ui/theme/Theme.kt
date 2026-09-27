@@ -33,19 +33,19 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
 private val ApexLightColorScheme = lightColorScheme(
-    primary = GoldLight,
-    onPrimary = OnGold,
-    primaryContainer = GoldSoftLight,
-    onPrimaryContainer = GoldTextLight,
-    inversePrimary = GoldDark,
+    primary = AccentLight,
+    onPrimary = OnAccentLight,
+    primaryContainer = AccentSoftLight,
+    onPrimaryContainer = AccentLight,
+    inversePrimary = AccentDark,
     secondary = LightOnSurfaceVariant,
     onSecondary = LightSurface,
     secondaryContainer = LightSurfaceVariant,
     onSecondaryContainer = LightOnSurface,
-    tertiary = GoldLight,
-    onTertiary = OnGold,
-    tertiaryContainer = GoldSoftLight,
-    onTertiaryContainer = GoldTextLight,
+    tertiary = AccentLight,
+    onTertiary = OnAccentLight,
+    tertiaryContainer = AccentSoftLight,
+    onTertiaryContainer = AccentLight,
     background = LightBackground,
     onBackground = LightOnBackground,
     surface = LightSurface,
@@ -57,34 +57,34 @@ private val ApexLightColorScheme = lightColorScheme(
     inverseOnSurface = DarkOnSurface,
     error = ErrorLight,
     onError = LightSurface,
-    errorContainer = Color(0xFFFBEAE8),
-    onErrorContainer = Color(0xFF7A1F19),
+    errorContainer = Color(0xFFFBE6EC),
+    onErrorContainer = Color(0xFF6E0F2E),
     outline = LightOutline,
     outlineVariant = LightOutline,
     scrim = Color.Black,
     surfaceBright = LightSurface,
     surfaceDim = LightSurfaceVariant,
     surfaceContainerLowest = LightSurface,
-    surfaceContainerLow = Color(0xFFFBFAF7),
+    surfaceContainerLow = Color(0xFFFAF9F7),
     surfaceContainer = LightSurface,
     surfaceContainerHigh = LightSurfaceVariant,
     surfaceContainerHighest = LightSurfaceHighest
 )
 
 private val ApexDarkColorScheme = darkColorScheme(
-    primary = GoldDark,
-    onPrimary = OnGold,
-    primaryContainer = GoldSoftDark,
-    onPrimaryContainer = GoldDark,
-    inversePrimary = GoldLight,
+    primary = AccentDark,
+    onPrimary = OnAccentDark,
+    primaryContainer = AccentSoftDark,
+    onPrimaryContainer = AccentDark,
+    inversePrimary = AccentLight,
     secondary = DarkOnSurfaceVariant,
     onSecondary = DarkBackground,
     secondaryContainer = DarkSurfaceVariant,
     onSecondaryContainer = DarkOnSurface,
-    tertiary = GoldDark,
-    onTertiary = OnGold,
-    tertiaryContainer = GoldSoftDark,
-    onTertiaryContainer = GoldDark,
+    tertiary = AccentDark,
+    onTertiary = OnAccentDark,
+    tertiaryContainer = AccentSoftDark,
+    onTertiaryContainer = AccentDark,
     background = DarkBackground,
     onBackground = DarkOnBackground,
     surface = DarkSurface,
@@ -95,23 +95,23 @@ private val ApexDarkColorScheme = darkColorScheme(
     inverseSurface = DarkOnSurface,
     inverseOnSurface = LightOnSurface,
     error = ErrorDark,
-    onError = Color(0xFF3A0F0C),
-    errorContainer = Color(0xFF4A1F1B),
-    onErrorContainer = Color(0xFFFFDAD6),
+    onError = Color(0xFF3A0718),
+    errorContainer = Color(0xFF4A1426),
+    onErrorContainer = Color(0xFFFFD9E1),
     outline = DarkOutline,
     outlineVariant = DarkOutline,
     scrim = Color.Black,
     surfaceBright = DarkSurfaceVariant,
     surfaceDim = DarkBackground,
     surfaceContainerLowest = DarkBackground,
-    surfaceContainerLow = Color(0xFF121216),
+    surfaceContainerLow = Color(0xFF121316),
     surfaceContainer = DarkSurface,
     surfaceContainerHigh = DarkSurfaceVariant,
     surfaceContainerHighest = DarkSurfaceHighest
 )
 
 // Extra colours that Material does not have a slot for. Read them with MaterialTheme.apex.
-// The accent is for fills and icons, accentText is the darker gold for small text.
+// The accent is for fills and icons. accentText is for small accent text (the same colour now, since alpenglow passes contrast).
 @Immutable
 class ApexColors(
     val accent: Color,
@@ -124,20 +124,20 @@ class ApexColors(
 )
 
 private val LightApexColors = ApexColors(
-    accent = GoldLight,
-    accentText = GoldTextLight,
-    onAccent = OnGold,
-    accentSoft = GoldSoftLight,
+    accent = AccentLight,
+    accentText = AccentLight,
+    onAccent = OnAccentLight,
+    accentSoft = AccentSoftLight,
     hairline = LightOutline,
     mutedText = LightOnSurfaceVariant,
     errorText = ErrorLight
 )
 
 private val DarkApexColors = ApexColors(
-    accent = GoldDark,
-    accentText = GoldDark,
-    onAccent = OnGold,
-    accentSoft = GoldSoftDark,
+    accent = AccentDark,
+    accentText = AccentDark,
+    onAccent = OnAccentDark,
+    accentSoft = AccentSoftDark,
     hairline = DarkOutline,
     mutedText = DarkOnSurfaceVariant,
     errorText = ErrorDark

@@ -63,7 +63,7 @@ import com.example.apexfitness.ui.theme.rememberGlassState
 import com.example.apexfitness.ui.theme.rememberOverlayProgress
 import com.example.apexfitness.ui.theme.staggeredEntrance
 
-// Shows every badge. Unlocked ones are gold, locked ones are grey with a progress bar.
+// Shows every badge. Unlocked ones are accent, locked ones are grey with a progress bar.
 @Composable
 fun AchievementsScreen(
     navController: NavHostController,

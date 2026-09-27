@@ -41,7 +41,7 @@ fun rememberGlassState(): GlassState = remember { GlassState() }
 fun Modifier.glassBackdrop(state: GlassState): Modifier = this
 
 // Card surface: solid colour, thin border, 20dp corners.
-// If a tint is passed the panel gets the soft gold look instead.
+// If a tint is passed the panel gets the soft accent look instead.
 @Composable
 fun Modifier.glassPanel(
     state: GlassState,
@@ -70,7 +70,7 @@ fun glassContentColor(): Color = MaterialTheme.colorScheme.onSurface
 @Composable
 fun glassMutedContentColor(): Color = MaterialTheme.apex.mutedText
 
-// Preview of a normal panel and a gold one
+// Preview of a normal panel and a accent one
 @Preview(showBackground = true)
 @Composable
 private fun GlassPanelPreview() {
@@ -99,7 +99,7 @@ private fun GlassPanelPreview() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(90.dp)
-                        .glassPanel(glassState, tint = GoldLight)
+                        .glassPanel(glassState, tint = AccentLight)
                 ) {
                     Column(modifier = Modifier.padding(Dimens.Space2)) {
                         Text(text = "Accent panel", style = MaterialTheme.typography.titleMedium, color = glassContentColor())

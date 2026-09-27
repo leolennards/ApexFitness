@@ -391,7 +391,7 @@ private fun EmptyStatsCard(
 // ---- Bar chart ----
 
 // Card with a big total and a row of bars. The bars grow from 0 the first time they show,
-// and the last bar (today or this week) uses the full gold colour.
+// and the last bar (today or this week) uses the full accent colour.
 @Composable
 private fun BarChartCard(
     values: List<Float>,

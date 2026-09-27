@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 
 // Shared building blocks so the screens stay consistent
 
-// The main button of a screen: gold pill, at least 52dp tall. Use one per screen.
+// The main button of a screen: accent pill, at least 52dp tall. Use one per screen.
 @Composable
 fun ApexPrimaryButton(
     text: String,

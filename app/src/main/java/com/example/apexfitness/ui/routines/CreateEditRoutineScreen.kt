@@ -450,7 +450,7 @@ private fun FieldLabel(text: String) {
     )
 }
 
-// Selected chip has a gold border, the others just a thin line
+// Selected chip has a accent border, the others just a thin line
 @Composable
 private fun SelectChip(
     selected: Boolean,

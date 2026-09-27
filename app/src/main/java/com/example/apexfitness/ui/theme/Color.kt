@@ -2,42 +2,44 @@ package com.example.apexfitness.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Colours. Warm neutrals with one gold accent that I only use for buttons, the active tab, progress and key numbers.
+// Colours: "Alpenglow". Cool snow and granite neutrals with one warm red-orange accent,
+// the colour of the light on a mountain peak at sunrise. I only use the accent for the main button,
+// the active tab, progress rings and bars, and a few key labels.
 //
-// Contrast notes:
-//  - Gold (#B8975A) is only about 2.5:1 on the cream background, so I use it for fills, rings and icons.
-//    Small gold text uses GoldTextLight (#866629) instead.
-//  - Text on a gold fill is near black, because white on gold is too low contrast.
-//  - Muted text on light is a bit darker than my first choice so it passes AA.
+// Contrast notes (WCAG AA needs 4.5:1 for small text):
+//  - Light accent #B93E22 is 5.6:1 with white text on it and 5.0:1 on the snow background,
+//    so it works for fills and small text.
+//  - Dark accent #F0663F is 6.2:1 with granite text on it and 5.7:1 on the dark surface.
+//  - Errors are a crimson that is clearly different from the accent.
 
-// Accent (gold)
-val GoldLight = Color(0xFFB8975A)
-val GoldDark = Color(0xFFD4B27A)
-val GoldTextLight = Color(0xFF866629)
-val OnGold = Color(0xFF16161A)
-val GoldSoftLight = Color(0xFFF5F0E8)  // accent at about 14% over white
-val GoldSoftDark = Color(0xFF35302B)  // accent at about 16% over the dark surface
+// Accent (alpenglow)
+val AccentLight = Color(0xFFB93E22)
+val AccentDark = Color(0xFFF0663F)
+val OnAccentLight = Color(0xFFFFFFFF)
+val OnAccentDark = Color(0xFF0C0D0F)
+val AccentSoftLight = Color(0xFFF6E7E1)  // accent at about 12% over white
+val AccentSoftDark = Color(0xFF2A1912)  // accent at about 14% over the dark surface
 
-// Light theme
-val LightBackground = Color(0xFFF7F5F0)
+// Light theme (snow)
+val LightBackground = Color(0xFFF4F3F0)
 val LightSurface = Color(0xFFFFFFFF)
-val LightSurfaceVariant = Color(0xFFF1EEE7)
-val LightSurfaceHighest = Color(0xFFEBE7DE)
-val LightOnBackground = Color(0xFF16161A)
-val LightOnSurface = Color(0xFF16161A)
-val LightOnSurfaceVariant = Color(0xFF6B6B74)
-val LightOutline = Color(0xFFE6E2D9)  // thin borders
+val LightSurfaceVariant = Color(0xFFEFEEEA)
+val LightSurfaceHighest = Color(0xFFE9E7E2)
+val LightOnBackground = Color(0xFF111214)
+val LightOnSurface = Color(0xFF111214)
+val LightOnSurfaceVariant = Color(0xFF6B6D72)
+val LightOutline = Color(0xFFE4E2DD)  // thin borders
 
-// Dark theme
-val DarkBackground = Color(0xFF0E0E11)
-val DarkSurface = Color(0xFF17171C)
-val DarkSurfaceVariant = Color(0xFF1F1F26)
-val DarkSurfaceHighest = Color(0xFF26262D)
-val DarkOnBackground = Color(0xFFF4F1EA)
-val DarkOnSurface = Color(0xFFF4F1EA)
-val DarkOnSurfaceVariant = Color(0xFF8E8E96)
-val DarkOutline = Color(0xFF26262D)  // thin borders
+// Dark theme (granite)
+val DarkBackground = Color(0xFF0C0D0F)
+val DarkSurface = Color(0xFF16171A)
+val DarkSurfaceVariant = Color(0xFF1D1E22)
+val DarkSurfaceHighest = Color(0xFF25272B)
+val DarkOnBackground = Color(0xFFF2F1EE)
+val DarkOnSurface = Color(0xFFF2F1EE)
+val DarkOnSurfaceVariant = Color(0xFF8C8E94)
+val DarkOutline = Color(0xFF25272B)  // thin borders
 
-// Errors (the only colour that is not gold)
-val ErrorLight = Color(0xFFB3372F)
-val ErrorDark = Color(0xFFE5877E)
+// Errors (crimson, so they never look like the accent)
+val ErrorLight = Color(0xFFB0204E)
+val ErrorDark = Color(0xFFFF7D98)
