@@ -24,8 +24,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.example.apexfitness.ui.theme.StatusBarScrim
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.example.apexfitness.ui.theme.ApexSecondaryButton
+import com.example.apexfitness.ui.theme.motionSpring
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -364,8 +371,14 @@ fun MainScreen(navController: NavHostController? = null) {
 
     // The data lives in a ViewModel so it survives trips to other screens
     val mainViewModel: MainViewModel = viewModel()
-    // Started straight away (not in an effect) so the very first frame already shows the skeleton
-    remember(uid) { uid?.let { mainViewModel.start(it) } }
+    // Started straight away (not in an effect) so the very first frame already shows the skeleton.
+    // start() does nothing if the listeners are already running for this user, so calling it every time is fine.
+    if (uid != null) mainViewModel.start(uid)
+    // Coming back to the app after midnight switches the water card to the new day
+    LifecycleResumeEffect(Unit) {
+        mainViewModel.refreshWaterIfNewDay()
+        onPauseOrDispose { }
+    }
     val profile = mainViewModel.profile
     val routines = mainViewModel.routines
     val logs = mainViewModel.logs
@@ -472,6 +485,7 @@ fun MainScreen(navController: NavHostController? = null) {
                             }
                         },
                         onOpenWaterTracking = { navController?.navigate("waterTracking") },
+                        onOpenProfile = { selectedRoute = Screen.Profile.route },
                         isLoading = isInitialLoading,
                         glassState = glassState,
                         topContentPadding = paddingValues.calculateTopPadding(),
@@ -617,7 +631,8 @@ fun BottomNavigationBar(
     }
 }
 
-// Home: today's workout first, then the smaller info. Shows a skeleton while loading.
+// Home: today's workout is the hero, then a few numbers and water sitting right on the background,
+// then your routines in one grouped card. Shows a skeleton while loading.
 @Composable
 fun HomePage(
     profile: UserProfile?,
@@ -629,6 +644,7 @@ fun HomePage(
     onSeeAllRoutines: () -> Unit,
     onQuickAddWater: (Int) -> Unit = {},
     onOpenWaterTracking: () -> Unit = {},
+    onOpenProfile: () -> Unit = {},
     isLoading: Boolean = false,
     glassState: com.example.apexfitness.ui.theme.GlassState = rememberGlassState(),
     topContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
@@ -653,6 +669,7 @@ fun HomePage(
                 onSeeAllRoutines = onSeeAllRoutines,
                 onQuickAddWater = onQuickAddWater,
                 onOpenWaterTracking = onOpenWaterTracking,
+                onOpenProfile = onOpenProfile,
                 glassState = glassState,
                 topContentPadding = topContentPadding,
                 bottomContentPadding = bottomContentPadding,
@@ -673,6 +690,7 @@ private fun HomeContent(
     onSeeAllRoutines: () -> Unit,
     onQuickAddWater: (Int) -> Unit,
     onOpenWaterTracking: () -> Unit,
+    onOpenProfile: () -> Unit,
     glassState: com.example.apexfitness.ui.theme.GlassState,
     topContentPadding: androidx.compose.ui.unit.Dp,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
@@ -685,10 +703,13 @@ private fun HomeContent(
     val weeklyProgress = remember(logs, profile) {
         StatsCalculations.weeklyCompletionPercent(logs, profile?.scheduleDays?.size ?: 7)
     }
+    // When each routine was last done, for the "last done Wednesday" line
+    val lastDoneByRoutine = remember(logs) {
+        logs.groupBy { it.routineId }.mapValues { (_, routineLogs) -> routineLogs.maxOf { it.dateMillis } }
+    }
     val firstName = profile?.name?.trim()?.substringBefore(" ").takeUnless { it.isNullOrBlank() } ?: "there"
     val initial = profile?.name?.trim()?.take(1)?.uppercase()
     val greeting = remember { greetingForNow() }
-    val motionEnabled = LocalMotionEnabled.current
     val shownRoutines = routines.take(5)
 
     LazyColumn(
@@ -697,7 +718,7 @@ private fun HomeContent(
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3 + topContentPadding,
+            top = Dimens.Space2 + topContentPadding,
             bottom = Dimens.Space3 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
@@ -708,37 +729,45 @@ private fun HomeContent(
                 dayName = fullDayNameFromCode(today),
                 firstName = firstName,
                 initial = initial,
+                onOpenProfile = onOpenProfile,
                 modifier = Modifier.staggeredEntrance(index = 0, key = "home-header")
             )
         }
 
-        // Today's workout, or an empty state
+        // Today's workout, or an empty state. If more than one is scheduled, only the first gets the main button.
         if (todaysRoutines.isEmpty()) {
             item(key = "hero-empty") {
                 NoRoutineTodayCard(
-                    modifier = Modifier.staggeredEntrance(index = 1, key = "home-hero-empty"),
+                    modifier = Modifier
+                        .padding(top = Dimens.Space1)
+                        .staggeredEntrance(index = 1, key = "home-hero-empty"),
                     glassState = glassState,
                     onCreateRoutine = onManageRoutines
                 )
             }
         } else {
-            items(todaysRoutines, key = { "hero-${it.id}" }) { routine ->
+            itemsIndexed(todaysRoutines, key = { _, routine -> "hero-${routine.id}" }) { index, routine ->
                 TodaysChallengeCard(
                     routine = routine,
+                    lastDoneMillis = lastDoneByRoutine[routine.id],
+                    isPrimary = index == 0,
                     glassState = glassState,
                     onStart = { onStartWorkout(routine.id) },
-                    modifier = Modifier.staggeredEntrance(index = 1, key = "home-hero-${routine.id}")
+                    modifier = Modifier
+                        .padding(top = if (index == 0) Dimens.Space1 else 0.dp)
+                        .staggeredEntrance(index = 1 + index, key = "home-hero-${routine.id}")
                 )
             }
         }
 
         item(key = "metrics") {
-            HomeMetricsCard(
+            HomeMetricsRow(
                 streak = streak,
                 totalWorkouts = totalWorkouts,
                 weeklyPercent = weeklyProgress,
-                glassState = glassState,
-                modifier = Modifier.staggeredEntrance(index = 2, key = "home-metrics")
+                modifier = Modifier
+                    .padding(top = Dimens.Space2)
+                    .staggeredEntrance(index = 2, key = "home-metrics")
             )
         }
 
@@ -755,41 +784,50 @@ private fun HomeContent(
 
         item(key = "routines-header") {
             HomeSectionHeader(
-                title = "My Routines",
-                subtitle = "Built by you",
+                title = "My routines",
                 actionLabel = "See all",
                 onAction = onSeeAllRoutines,
                 modifier = Modifier
-                    .padding(top = Dimens.Space2)
+                    .padding(top = Dimens.Space1)
                     .staggeredEntrance(index = 4, key = "home-routines-header")
             )
         }
 
-        if (routines.isEmpty()) {
-            item(key = "routines-empty") {
+        item(key = "routines") {
+            if (routines.isEmpty()) {
                 NoRoutinesYetCard(
                     modifier = Modifier.staggeredEntrance(index = 5, key = "home-routines-empty"),
                     glassState = glassState,
                     onCreateRoutine = onManageRoutines
                 )
-            }
-        } else {
-            items(shownRoutines, key = { "routine-${it.id}" }) { routine ->
-                RoutineSummaryCard(
-                    routine = routine,
-                    glassState = glassState,
-                    onClick = { onStartWorkout(routine.id) },
+            } else {
+                // One grouped card with thin dividers instead of a separate card per routine
+                Column(
                     modifier = Modifier
-                        .animateItem(
-                            fadeInSpec = apexTween(motionEnabled, Motion.Fade),
-                            placementSpec = apexSpring(motionEnabled),
-                            fadeOutSpec = apexTween(motionEnabled, Motion.Micro)
-                        )
-                        .staggeredEntrance(
-                            index = 5 + shownRoutines.indexOf(routine),
-                            key = "home-routine-${routine.id}"
-                        )
-                )
+                        .fillMaxWidth()
+                        .staggeredEntrance(index = 5, key = "home-routines")
+                        .glassPanel(glassState, shape = CardShape)
+                        .animateContentSize(motionSpring())
+                ) {
+                    shownRoutines.forEachIndexed { index, routine ->
+                        if (index > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = 76.dp)
+                                    .fillMaxWidth()
+                                    .height(Dimens.Hairline)
+                                    .background(MaterialTheme.apex.hairline)
+                            )
+                        }
+                        key(routine.id) {
+                            RoutineSummaryCard(
+                                routine = routine,
+                                glassState = glassState,
+                                onClick = { onStartWorkout(routine.id) }
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -801,47 +839,50 @@ private fun HomeHeader(
     dayName: String,
     firstName: String,
     initial: String?,
+    onOpenProfile: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${greeting.uppercase()}  ·  ${dayName.uppercase()}",
+                text = "${dayName.uppercase()}  ·  ${greeting.uppercase()}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.apex.mutedText
             )
-            Spacer(modifier = Modifier.height(Dimens.Space1))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Hey $firstName, ready?",
-                style = MaterialTheme.typography.headlineLarge,
+                text = "Hey $firstName",
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
         }
         Spacer(modifier = Modifier.width(Dimens.Space2))
+        // The avatar opens the Profile tab
         Box(
             modifier = Modifier
                 .size(Dimens.MinTouchTarget)
+                .apexClickable(onClick = onOpenProfile)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surface)
-                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
+                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape)
+                .semantics { contentDescription = "Open profile" },
             contentAlignment = Alignment.Center
         ) {
             if (initial.isNullOrBlank()) {
                 Icon(
                     imageVector = Icons.Outlined.Person,
-                    contentDescription = "Profile",
-                    tint = MaterialTheme.apex.accentText,
-                    modifier = Modifier.size(24.dp)
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(22.dp)
                 )
             } else {
                 Text(
                     text = initial,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.apex.accentText
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -851,7 +892,6 @@ private fun HomeHeader(
 @Composable
 private fun HomeSectionHeader(
     title: String,
-    subtitle: String,
     actionLabel: String,
     onAction: () -> Unit,
     modifier: Modifier = Modifier
@@ -862,18 +902,12 @@ private fun HomeSectionHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.apex.mutedText
-            )
-        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f)
+        )
         TextButton(
             onClick = {
                 haptics.tick()
@@ -884,12 +918,12 @@ private fun HomeSectionHeader(
             Text(
                 text = actionLabel,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.apex.accentText
+                color = MaterialTheme.apex.mutedText
             )
             Icon(
                 imageVector = Icons.Outlined.ChevronRight,
                 contentDescription = null,
-                tint = MaterialTheme.apex.accentText,
+                tint = MaterialTheme.apex.mutedText,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -904,31 +938,32 @@ private fun HomeSkeleton(topContentPadding: androidx.compose.ui.unit.Dp, bottomC
             .padding(
                 start = Dimens.ScreenEdge,
                 end = Dimens.ScreenEdge,
-                top = Dimens.Space3 + topContentPadding,
+                top = Dimens.Space2 + topContentPadding,
                 bottom = bottomContentPadding
             ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                SkeletonBlock(modifier = Modifier.width(120.dp).height(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                SkeletonBlock(modifier = Modifier.width(160.dp).height(12.dp))
                 Spacer(modifier = Modifier.height(Dimens.Space1))
-                SkeletonBlock(modifier = Modifier.width(200.dp).height(30.dp))
+                SkeletonBlock(modifier = Modifier.width(110.dp).height(20.dp))
             }
             SkeletonCircle(size = Dimens.MinTouchTarget)
         }
-        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(196.dp), shape = CardShape)
-        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(96.dp), shape = CardShape)
-        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(88.dp), shape = CardShape)
+        Spacer(modifier = Modifier.height(4.dp))
+        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(236.dp), shape = RoundedCornerShape(24.dp))
         Spacer(modifier = Modifier.height(Dimens.Space1))
-        SkeletonBlock(modifier = Modifier.width(140.dp).height(22.dp))
-        repeat(2) {
-            SkeletonBlock(modifier = Modifier.fillMaxWidth().height(80.dp), shape = CardShape)
+        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space3)) {
+            repeat(3) { SkeletonBlock(modifier = Modifier.weight(1f).height(56.dp)) }
         }
+        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(72.dp))
+        Spacer(modifier = Modifier.height(Dimens.Space1))
+        SkeletonBlock(modifier = Modifier.width(140.dp).height(24.dp))
+        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(152.dp), shape = CardShape)
     }
 }
 
@@ -952,32 +987,52 @@ fun fullDayNameFromCode(code: String): String = when (code) {
     else -> code
 }
 
-// Streak, workouts and this week as three big numbers
+// "today", "yesterday", "Wednesday" within the last week, otherwise "12 Sep"
+private fun lastDoneLabel(millis: Long): String {
+    val dayMillis = 24L * 60 * 60 * 1000
+    val startOfToday = java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val daysAgo = when {
+        millis >= startOfToday -> 0L
+        else -> (startOfToday - millis) / dayMillis + 1
+    }
+    return when {
+        daysAgo == 0L -> "today"
+        daysAgo == 1L -> "yesterday"
+        daysAgo < 7L -> java.text.SimpleDateFormat("EEEE", java.util.Locale.getDefault()).format(java.util.Date(millis))
+        else -> java.text.SimpleDateFormat("d MMM", java.util.Locale.getDefault()).format(java.util.Date(millis))
+    }
+}
+
+// 1250 becomes "1,250"
+private fun groupThousands(value: Int): String = "%,d".format(value)
+
+// Streak, workouts and this week as three big numbers, sitting on the background with thin dividers
 @Composable
-private fun HomeMetricsCard(
+private fun HomeMetricsRow(
     streak: Int,
     totalWorkouts: Int,
     weeklyPercent: Int,
-    glassState: com.example.apexfitness.ui.theme.GlassState,
     modifier: Modifier = Modifier
 ) {
     val shownStreak by rememberCountUpInt(streak)
     val shownWorkouts by rememberCountUpInt(totalWorkouts)
     val shownPercent by rememberCountUpInt(weeklyPercent)
-    val valueStyle = ApexText.Numeral.copy(fontSize = 32.sp, lineHeight = 36.sp)
+    val valueStyle = ApexText.Numeral.copy(fontSize = 40.sp, lineHeight = 42.sp)
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .glassPanel(glassState, shape = CardShape)
-            .padding(vertical = Dimens.Space3),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MetricBlock(value = "$shownStreak", label = "STREAK", modifier = Modifier.weight(1f), valueStyle = valueStyle)
+        MetricBlock(value = "$shownStreak", label = "DAY STREAK", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = MaterialTheme.colorScheme.onBackground)
         MetricDivider()
-        MetricBlock(value = "$shownWorkouts", label = "WORKOUTS", modifier = Modifier.weight(1f), valueStyle = valueStyle)
+        MetricBlock(value = "$shownWorkouts", label = "WORKOUTS", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = MaterialTheme.colorScheme.onBackground)
         MetricDivider()
-        MetricBlock(value = "$shownPercent%", label = "THIS WEEK", modifier = Modifier.weight(1f), valueStyle = valueStyle)
+        MetricBlock(value = "$shownPercent%", label = "THIS WEEK", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = MaterialTheme.colorScheme.onBackground)
     }
 }
 
@@ -991,7 +1046,7 @@ private fun MetricDivider() {
     )
 }
 
-// Small water card for Home with a +250ml quick add
+// Water for today as a row between two hairlines, with a +250ml quick add
 @Composable
 fun WaterWidgetCard(
     todayMl: Int,
@@ -1003,114 +1058,126 @@ fun WaterWidgetCard(
 ) {
     val progressFraction = if (goalMl <= 0) 0f else (todayMl.toFloat() / goalMl.toFloat()).coerceIn(0f, 1f)
     val shownMl by rememberCountUpInt(todayMl)
+    val hairline = MaterialTheme.apex.hairline
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .apexClickable(onClick = onClick)
-            .glassPanel(glassState, shape = CardShape)
-            .padding(Dimens.Space3),
+            .apexClickable(pressedScale = 0.99f, onClick = onClick)
+            .drawBehind {
+                val stroke = 1.dp.toPx()
+                drawLine(hairline, Offset(0f, 0f), Offset(size.width, 0f), stroke)
+                drawLine(hairline, Offset(0f, size.height), Offset(size.width, size.height), stroke)
+            }
+            .padding(vertical = Dimens.Space2),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "WATER",
                 style = MaterialTheme.typography.labelMedium,
-                color = glassMutedContentColor()
+                color = MaterialTheme.apex.mutedText
             )
-            Spacer(modifier = Modifier.height(Dimens.Space1))
+            Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    text = "$shownMl",
+                    text = groupThousands(shownMl),
                     style = ApexText.NumeralSmall,
-                    color = glassContentColor()
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = " / $goalMl ml",
+                    text = " / ${groupThousands(goalMl)} ml",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = glassMutedContentColor(),
+                    color = MaterialTheme.apex.mutedText,
                     modifier = Modifier.padding(start = 2.dp, bottom = 3.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(Dimens.Space2 - 4.dp))
+            Spacer(modifier = Modifier.height(Dimens.Space1 + 2.dp))
             ApexProgressBar(progress = progressFraction, modifier = Modifier.fillMaxWidth())
         }
-        Spacer(modifier = Modifier.width(Dimens.Space2))
+        Spacer(modifier = Modifier.width(Dimens.Space3))
         Box(
             modifier = Modifier
                 .size(Dimens.MinTouchTarget)
                 .apexClickable(onClick = onQuickAdd)
                 .clip(CircleShape)
-                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
+                .background(MaterialTheme.colorScheme.surface)
+                .border(Dimens.Hairline, hairline, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Outlined.Add,
-                contentDescription = "Add 250ml",
-                tint = MaterialTheme.apex.accentText,
+                contentDescription = "Add 250 ml of water",
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(20.dp)
             )
         }
     }
 }
 
-// Today's workout with the main button
+// Today's workout: the hero of Home. The routine name is big, the details are one quiet line.
 @Composable
-fun TodaysChallengeCard(routine: Routine, glassState: com.example.apexfitness.ui.theme.GlassState, onStart: () -> Unit, modifier: Modifier = Modifier) {
+fun TodaysChallengeCard(
+    routine: Routine,
+    glassState: com.example.apexfitness.ui.theme.GlassState,
+    onStart: () -> Unit,
+    modifier: Modifier = Modifier,
+    lastDoneMillis: Long? = null,
+    isPrimary: Boolean = true
+) {
     val sharedKey = "today-${routine.id}"
-    val exerciseCount by rememberCountUpInt(routine.exercises.size)
+    val exerciseCount = routine.exercises.size
+    val setCount = routine.exercises.sumOf { it.sets.coerceAtLeast(1) }
+    val details = buildList {
+        add("$exerciseCount exercise${if (exerciseCount == 1) "" else "s"}")
+        if (setCount > 0) add("$setCount sets")
+        lastDoneMillis?.let { add("last done ${lastDoneLabel(it)}") }
+    }.joinToString("  ·  ")
     Column(
         modifier = modifier
             .fillMaxWidth()
             .sharedCardBounds(sharedKey)
-            .glassPanel(glassState, shape = CardShape)
+            .glassPanel(glassState, shape = RoundedCornerShape(24.dp))
             .padding(Dimens.Space3)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = RoutineIcons.iconFor(routine.iconKey),
-                contentDescription = null,
-                tint = MaterialTheme.apex.accentText,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(Dimens.Space1))
-            Text(
-                text = "TODAY'S WORKOUT",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.apex.accentText
-            )
-        }
-
-        Spacer(modifier = Modifier.height(Dimens.Space2))
-
+        Text(
+            text = "TODAY'S WORKOUT",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.apex.accentText
+        )
+        Spacer(modifier = Modifier.height(Dimens.Space1 + 4.dp))
         Text(
             text = routine.name,
-            style = MaterialTheme.typography.headlineLarge,
-            color = glassContentColor(),
+            style = MaterialTheme.typography.displaySmall.copy(fontSize = 42.sp, lineHeight = 44.sp),
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-
-        Spacer(modifier = Modifier.height(Dimens.Space2))
-
-        MetricBlock(
-            value = "$exerciseCount",
-            label = if (routine.exercises.size == 1) "EXERCISE" else "EXERCISES",
-            valueStyle = ApexText.HeroNumeral,
-            valueColor = glassContentColor(),
-            horizontalAlignment = Alignment.Start
+        Spacer(modifier = Modifier.height(Dimens.Space1 + 4.dp))
+        Text(
+            text = details,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.apex.mutedText
         )
-
         Spacer(modifier = Modifier.height(Dimens.Space3))
-
-        ApexPrimaryButton(
-            text = "Begin Workout",
-            onClick = {
-                SharedKeys.lastRoutine = sharedKey
-                onStart()
-            },
-            modifier = Modifier.fillMaxWidth(),
-            icon = Icons.Outlined.PlayArrow
-        )
+        val onBegin = {
+            SharedKeys.lastRoutine = sharedKey
+            onStart()
+        }
+        if (isPrimary) {
+            ApexPrimaryButton(
+                text = "Begin workout",
+                onClick = onBegin,
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Outlined.PlayArrow
+            )
+        } else {
+            ApexSecondaryButton(
+                text = "Begin workout",
+                onClick = onBegin,
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Outlined.PlayArrow
+            )
+        }
     }
 }
 
@@ -1119,29 +1186,29 @@ fun NoRoutineTodayCard(modifier: Modifier = Modifier, glassState: com.example.ap
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .glassPanel(glassState, shape = CardShape)
+            .glassPanel(glassState, shape = RoundedCornerShape(24.dp))
             .padding(Dimens.Space3)
     ) {
         Text(
             text = "NOTHING SCHEDULED",
             style = MaterialTheme.typography.labelMedium,
-            color = glassMutedContentColor()
+            color = MaterialTheme.apex.mutedText
+        )
+        Spacer(modifier = Modifier.height(Dimens.Space1 + 4.dp))
+        Text(
+            text = "Rest day",
+            style = MaterialTheme.typography.displaySmall.copy(fontSize = 42.sp, lineHeight = 44.sp),
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(Dimens.Space1))
         Text(
-            text = "A quiet day",
-            style = MaterialTheme.typography.headlineSmall,
-            color = glassContentColor()
-        )
-        Spacer(modifier = Modifier.height(Dimens.Space1))
-        Text(
-            text = "Build a routine and assign it to today so it shows up here automatically.",
+            text = "Nothing is set for today. Build a routine and pick its days, and it will show up here.",
             style = MaterialTheme.typography.bodyMedium,
-            color = glassMutedContentColor()
+            color = MaterialTheme.apex.mutedText
         )
         Spacer(modifier = Modifier.height(Dimens.Space3))
-        ApexPrimaryButton(
-            text = "Build a Routine",
+        ApexSecondaryButton(
+            text = "Build a routine",
             onClick = onCreateRoutine,
             icon = Icons.Outlined.Add
         )
@@ -1153,32 +1220,39 @@ fun NoRoutinesYetCard(modifier: Modifier = Modifier, glassState: com.example.ape
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .apexClickable(onClick = onCreateRoutine)
             .glassPanel(glassState, shape = CardShape)
-            .padding(Dimens.Space3),
+            .padding(horizontal = Dimens.Space2, vertical = Dimens.Space2),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = "No routines yet", style = MaterialTheme.typography.titleMedium, color = glassContentColor())
-            Text(text = "Tap to create your first one", style = MaterialTheme.typography.bodyMedium, color = glassMutedContentColor())
-        }
         Box(
             modifier = Modifier
-                .size(Dimens.MinTouchTarget)
-                .apexClickable(onClick = onCreateRoutine)
+                .size(44.dp)
                 .clip(CircleShape)
-                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
+                .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Outlined.Add,
-                contentDescription = "Create routine",
-                tint = MaterialTheme.apex.accentText,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(20.dp)
             )
         }
+        Spacer(modifier = Modifier.width(Dimens.Space2))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "No routines yet", style = MaterialTheme.typography.titleMedium, color = glassContentColor())
+            Text(text = "Tap to create your first one", style = MaterialTheme.typography.bodyMedium, color = glassMutedContentColor())
+        }
+        Icon(
+            imageVector = Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = glassMutedContentColor()
+        )
     }
 }
 
+// One routine row inside the grouped "My routines" card
 @Composable
 fun RoutineSummaryCard(
     routine: Routine,
@@ -1193,26 +1267,26 @@ fun RoutineSummaryCard(
         modifier = modifier
             .fillMaxWidth()
             .sharedCardBounds(sharedKey)
-            .apexClickable(onClick = {
+            .apexClickable(pressedScale = 0.99f, onClick = {
                 SharedKeys.lastRoutine = sharedKey
                 onClick()
             })
-            .glassPanel(glassState, shape = CardShape)
-            .padding(Dimens.Space3),
+            .heightIn(min = 72.dp)
+            .padding(horizontal = Dimens.Space2, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(Dimens.MinTouchTarget)
+                .size(44.dp)
                 .clip(CircleShape)
-                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
+                .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = RoutineIcons.iconFor(routine.iconKey),
                 contentDescription = null,
-                tint = MaterialTheme.apex.accentText,
-                modifier = Modifier.size(22.dp)
+                tint = MaterialTheme.apex.mutedText,
+                modifier = Modifier.size(20.dp)
             )
         }
         Spacer(modifier = Modifier.width(Dimens.Space2))
