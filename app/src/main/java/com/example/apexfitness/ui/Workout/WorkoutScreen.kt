@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,7 +69,9 @@ fun WorkoutTabPage(
     onManageRoutines: () -> Unit,
     isLoading: Boolean = false,
     glassState: com.example.apexfitness.ui.theme.GlassState = rememberGlassState(),
-    bottomContentPadding: Dp = 0.dp
+    topContentPadding: Dp = 0.dp,
+    bottomContentPadding: Dp = 0.dp,
+    listState: LazyListState = rememberLazyListState()
 ) {
     Crossfade(
         targetState = isLoading,
@@ -75,14 +79,16 @@ fun WorkoutTabPage(
         label = "workoutTabLoadingCrossfade"
     ) { loading ->
         if (loading) {
-            WorkoutTabSkeleton(bottomContentPadding = bottomContentPadding)
+            WorkoutTabSkeleton(topContentPadding = topContentPadding, bottomContentPadding = bottomContentPadding)
         } else {
             WorkoutTabContent(
                 routines = routines,
                 onStart = onStart,
                 onManageRoutines = onManageRoutines,
                 glassState = glassState,
-                bottomContentPadding = bottomContentPadding
+                topContentPadding = topContentPadding,
+                bottomContentPadding = bottomContentPadding,
+                listState = listState
             )
         }
     }
@@ -94,17 +100,20 @@ private fun WorkoutTabContent(
     onStart: (String) -> Unit,
     onManageRoutines: () -> Unit,
     glassState: com.example.apexfitness.ui.theme.GlassState,
-    bottomContentPadding: Dp
+    topContentPadding: Dp,
+    bottomContentPadding: Dp,
+    listState: LazyListState
 ) {
     val today = remember { todayDayCode() }
     val unscheduled = routines.filter { it.days.isEmpty() }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3,
+            top = Dimens.Space3 + topContentPadding,
             bottom = Dimens.Space3 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2 - 4.dp)
@@ -402,13 +411,13 @@ private fun UnscheduledRoutineRow(
 }
 
 @Composable
-private fun WorkoutTabSkeleton(bottomContentPadding: Dp) {
+private fun WorkoutTabSkeleton(topContentPadding: Dp, bottomContentPadding: Dp) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3,
+            top = Dimens.Space3 + topContentPadding,
             bottom = Dimens.Space3 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2 - 4.dp)

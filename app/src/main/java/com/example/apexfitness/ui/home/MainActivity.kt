@@ -19,6 +19,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.apexfitness.ui.theme.StatusBarScrim
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -124,7 +130,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        // Android 15+ forces edge-to-edge, so I turn it on and pad the root layout for the system bars
+        // Android 15+ forces edge-to-edge. The main tabs draw under the status bar, the other screens get padded (see Pushed)
         enableEdgeToEdge()
         if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
         // Keep the splash screen up for a moment so the logo can be seen
@@ -167,7 +173,6 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
-                        .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
                 ) {
                     CompositionLocalProvider(LocalSharedTransitionScope provides this) {
                         NavHost(
@@ -192,22 +197,34 @@ class MainActivity : ComponentActivity() {
                             }
                         ) {
                             composable("welcome") {
-                                WelcomeScreen(navController = navController)
+                                Pushed {
+                                    WelcomeScreen(navController = navController)
+                                }
                             }
                             composable("signup") {
-                                SignUpScreen(navController = navController, formState = onboardingFormState)
+                                Pushed {
+                                    SignUpScreen(navController = navController, formState = onboardingFormState)
+                                }
                             }
                             composable("getStarted") {
-                                GetStartedScreen(navController = navController, formState = onboardingFormState)
+                                Pushed {
+                                    GetStartedScreen(navController = navController, formState = onboardingFormState)
+                                }
                             }
                             composable("fitnessGoals") {
-                                FitnessGoalsScreen(navController = navController, formState = onboardingFormState)
+                                Pushed {
+                                    FitnessGoalsScreen(navController = navController, formState = onboardingFormState)
+                                }
                             }
                             composable("workoutSchedule") {
-                                WorkoutScheduleScreen(navController = navController, formState = onboardingFormState)
+                                Pushed {
+                                    WorkoutScheduleScreen(navController = navController, formState = onboardingFormState)
+                                }
                             }
                             composable("signin") {
-                                SignInScreen(navController = navController)
+                                Pushed {
+                                    SignInScreen(navController = navController)
+                                }
                             }
                             composable("main") {
                                 CompositionLocalProvider(LocalNavAnimatedScope provides this@composable) {
@@ -215,66 +232,96 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             composable("routines") {
-                                CompositionLocalProvider(LocalNavAnimatedScope provides this@composable) {
-                                    RoutineListScreen(navController = navController)
+                                Pushed {
+                                    CompositionLocalProvider(LocalNavAnimatedScope provides this@composable) {
+                                        RoutineListScreen(navController = navController)
+                                    }
                                 }
                             }
                             composable("routineEditor/{routineId}") { backStackEntry ->
                                 val routineId = backStackEntry.arguments?.getString("routineId") ?: "new"
-                                CompositionLocalProvider(LocalNavAnimatedScope provides this@composable) {
-                                    CreateEditRoutineScreen(navController = navController, routineId = routineId)
+                                Pushed {
+                                    CompositionLocalProvider(LocalNavAnimatedScope provides this@composable) {
+                                        CreateEditRoutineScreen(navController = navController, routineId = routineId)
+                                    }
                                 }
                             }
                             composable("workoutSession/{routineId}") { backStackEntry ->
                                 val routineId = backStackEntry.arguments?.getString("routineId") ?: return@composable
-                                CompositionLocalProvider(LocalNavAnimatedScope provides this@composable) {
-                                    WorkoutSessionScreen(navController = navController, routineId = routineId)
+                                Pushed {
+                                    CompositionLocalProvider(LocalNavAnimatedScope provides this@composable) {
+                                        WorkoutSessionScreen(navController = navController, routineId = routineId)
+                                    }
                                 }
                             }
                             composable("editProfile") {
-                                EditProfileScreen(navController = navController)
+                                Pushed {
+                                    EditProfileScreen(navController = navController)
+                                }
                             }
                             composable("settings") {
-                                SettingsScreen(
-                                    navController = navController,
-                                    isDarkMode = isDarkMode,
-                                    onToggleDarkMode = { enabled -> ThemePreferences.setDarkMode(appContext, enabled) },
-                                    notificationsEnabled = notificationsEnabled,
-                                    reminderHour = reminderHour,
-                                    reminderMinute = reminderMinute,
-                                    onToggleNotifications = { enabled -> NotificationPreferences.setEnabled(appContext, enabled) },
-                                    onReminderTimeChange = { hour, minute -> NotificationPreferences.setReminderTime(appContext, hour, minute) }
-                                )
+                                Pushed {
+                                    SettingsScreen(
+                                        navController = navController,
+                                        isDarkMode = isDarkMode,
+                                        onToggleDarkMode = { enabled -> ThemePreferences.setDarkMode(appContext, enabled) },
+                                        notificationsEnabled = notificationsEnabled,
+                                        reminderHour = reminderHour,
+                                        reminderMinute = reminderMinute,
+                                        onToggleNotifications = { enabled -> NotificationPreferences.setEnabled(appContext, enabled) },
+                                        onReminderTimeChange = { hour, minute -> NotificationPreferences.setReminderTime(appContext, hour, minute) }
+                                    )
+                                }
                             }
                             composable("activityHistory") {
-                                ActivityHistoryScreen(navController = navController)
+                                Pushed {
+                                    ActivityHistoryScreen(navController = navController)
+                                }
                             }
                             composable("healthData") {
-                                HealthDataScreen(navController = navController)
+                                Pushed {
+                                    HealthDataScreen(navController = navController)
+                                }
                             }
                             composable("achievements") {
-                                AchievementsScreen(navController = navController)
+                                Pushed {
+                                    AchievementsScreen(navController = navController)
+                                }
                             }
                             composable("calendar") {
-                                CalendarScreen(navController = navController)
+                                Pushed {
+                                    CalendarScreen(navController = navController)
+                                }
                             }
                             composable("challenges") {
-                                ChallengesScreen(navController = navController)
+                                Pushed {
+                                    ChallengesScreen(navController = navController)
+                                }
                             }
                             composable("waterTracking") {
-                                WaterTrackingScreen(navController = navController)
+                                Pushed {
+                                    WaterTrackingScreen(navController = navController)
+                                }
                             }
                             composable("cardio") {
-                                CardioTrackingScreen(navController = navController)
+                                Pushed {
+                                    CardioTrackingScreen(navController = navController)
+                                }
                             }
                             composable("workoutSummary") {
-                                WorkoutSummaryScreen(navController = navController)
+                                Pushed {
+                                    WorkoutSummaryScreen(navController = navController)
+                                }
                             }
                             composable("bodyProgress") {
-                                BodyTrackingScreen(navController = navController)
+                                Pushed {
+                                    BodyTrackingScreen(navController = navController)
+                                }
                             }
                             composable("progressPhotos") {
-                                ProgressPhotosScreen(navController = navController)
+                                Pushed {
+                                    ProgressPhotosScreen(navController = navController)
+                                }
                             }
                         }
                     }
@@ -292,6 +339,22 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object Profile : Screen("profile", "Profile", Icons.Outlined.Person)
 }
 
+fun screenForRoute(route: String): Screen = when (route) {
+    Screen.Stats.route -> Screen.Stats
+    Screen.Workout.route -> Screen.Workout
+    Screen.Profile.route -> Screen.Profile
+    else -> Screen.Home
+}
+
+// Every screen except the main tabs sits inside the safe area: status bar, navigation bar, notch and keyboard.
+// The main tabs handle their own insets so they can scroll under the bars.
+@Composable
+private fun Pushed(content: @Composable () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+        content()
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(navController: NavHostController? = null) {
@@ -299,38 +362,30 @@ fun MainScreen(navController: NavHostController? = null) {
     val authService = remember { AuthService(context.applicationContext) }
     val uid = authService.getCurrentUser()?.uid
 
-    var selectedScreen by remember { mutableStateOf<Screen>(Screen.Home) }
-    var profile by remember { mutableStateOf<UserProfile?>(null) }
-    var routines by remember { mutableStateOf<List<Routine>>(emptyList()) }
-    var logs by remember { mutableStateOf<List<WorkoutLog>>(emptyList()) }
-    var personalRecords by remember { mutableStateOf<List<PersonalRecord>>(emptyList()) }
-    var todayWaterMl by remember { mutableStateOf(0) }
-    var hasLoadedProfile by remember { mutableStateOf(false) }
-    var hasLoadedRoutines by remember { mutableStateOf(false) }
-    var hasLoadedLogs by remember { mutableStateOf(false) }
-    var hasLoadedPersonalRecords by remember { mutableStateOf(false) }
-    var hasLoadedWater by remember { mutableStateOf(false) }
+    // The data lives in a ViewModel so it survives trips to other screens
+    val mainViewModel: MainViewModel = viewModel()
+    // Started straight away (not in an effect) so the very first frame already shows the skeleton
+    remember(uid) { uid?.let { mainViewModel.start(it) } }
+    val profile = mainViewModel.profile
+    val routines = mainViewModel.routines
+    val logs = mainViewModel.logs
+    val personalRecords = mainViewModel.personalRecords
+    val todayWaterMl = mainViewModel.todayWaterMl
+    val isInitialLoading = mainViewModel.isInitialLoading
 
-    LaunchedEffect(uid) {
-        val id = uid ?: return@LaunchedEffect
-        launch { FirestoreRepository.observeProfile(id).collect { profile = it; hasLoadedProfile = true } }
-        launch { FirestoreRepository.observeRoutines(id).collect { routines = it; hasLoadedRoutines = true } }
-        launch { FirestoreRepository.observeWorkoutLogs(id).collect { logs = it; hasLoadedLogs = true } }
-        launch { FirestoreRepository.observePersonalRecords(id).collect { personalRecords = it; hasLoadedPersonalRecords = true } }
-        launch {
-            FirestoreRepository.observeTodayWaterLog(id).collect {
-                todayWaterMl = it?.millilitersConsumed ?: 0
-                hasLoadedWater = true
-            }
-        }
-    }
+    // Saved so Back from Settings lands on the tab I left, not Home
+    var selectedRoute by rememberSaveable { mutableStateOf(Screen.Home.route) }
+    val selectedScreen = screenForRoute(selectedRoute)
 
-    val isInitialLoading = uid != null && !(hasLoadedProfile && hasLoadedRoutines && hasLoadedLogs && hasLoadedPersonalRecords && hasLoadedWater)
+    // One scroll position per tab, kept when switching tabs or coming back
+    val homeListState = rememberLazyListState()
+    val statsListState = rememberLazyListState()
+    val workoutListState = rememberLazyListState()
+    val profileListState = rememberLazyListState()
 
     val coroutineScope = rememberCoroutineScope()
-    var dismissedAchievementsThisSession by remember { mutableStateOf<Set<String>>(emptySet()) }
-    val acknowledgedAchievementIds = remember(profile, dismissedAchievementsThisSession) {
-        (profile?.acknowledgedAchievementIds ?: emptyList()).toSet() + dismissedAchievementsThisSession
+    val acknowledgedAchievementIds = remember(profile, mainViewModel.dismissedAchievements) {
+        (profile?.acknowledgedAchievementIds ?: emptyList()).toSet() + mainViewModel.dismissedAchievements
     }
     val activeAchievementCelebration = remember(logs.size, acknowledgedAchievementIds, isInitialLoading) {
         if (isInitialLoading) null
@@ -341,7 +396,7 @@ fun MainScreen(navController: NavHostController? = null) {
 
     fun dismissAchievementCelebration() {
         val tier = activeAchievementCelebration ?: return
-        dismissedAchievementsThisSession = dismissedAchievementsThisSession + tier.id
+        mainViewModel.dismissedAchievements = mainViewModel.dismissedAchievements + tier.id
         val currentUid = uid ?: return
         val updatedAcknowledged = ((profile?.acknowledgedAchievementIds ?: emptyList()) + tier.id).distinct()
         coroutineScope.launch {
@@ -350,9 +405,8 @@ fun MainScreen(navController: NavHostController? = null) {
     }
 
     val levelProgress = remember(logs) { GamificationCalculations.levelProgress(logs) }
-    var dismissedLevelUpThisSession by remember { mutableStateOf(1) }
-    val acknowledgedLevel = remember(profile, dismissedLevelUpThisSession) {
-        maxOf(profile?.acknowledgedLevel ?: 1, dismissedLevelUpThisSession)
+    val acknowledgedLevel = remember(profile, mainViewModel.dismissedLevelUp) {
+        maxOf(profile?.acknowledgedLevel ?: 1, mainViewModel.dismissedLevelUp)
     }
     // Only shown when there is no achievement popup, so they never stack
     val activeLevelUpCelebration = remember(levelProgress.level, acknowledgedLevel, isInitialLoading, activeAchievementCelebration) {
@@ -362,7 +416,7 @@ fun MainScreen(navController: NavHostController? = null) {
 
     fun dismissLevelUpCelebration() {
         val newLevel = activeLevelUpCelebration ?: return
-        dismissedLevelUpThisSession = newLevel
+        mainViewModel.dismissedLevelUp = newLevel
         val currentUid = uid ?: return
         coroutineScope.launch {
             runCatching { FirestoreRepository.updateProfileFields(currentUid, mapOf("acknowledgedLevel" to newLevel)) }
@@ -378,17 +432,24 @@ fun MainScreen(navController: NavHostController? = null) {
         bottomBar = {
             BottomNavigationBar(
                 selectedScreen = selectedScreen,
-                onScreenSelected = { screen -> selectedScreen = screen },
+                onScreenSelected = { screen -> selectedRoute = screen.route },
                 glassState = glassState
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
     ) { paddingValues ->
-        // No padding here on purpose. Each page gets bottomContentPadding so nothing hides under the tab bar.
+        // No top or bottom padding here on purpose. Each page adds topContentPadding and bottomContentPadding
+        // to its list, so content scrolls under the status bar and the tab bar instead of stopping at them.
+        val layoutDirection = LocalLayoutDirection.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .glassScreenBackground(glassState)
+                .padding(
+                    start = paddingValues.calculateStartPadding(layoutDirection),
+                    end = paddingValues.calculateEndPadding(layoutDirection)
+                )
         ) {
             // Tabs just fade, no slide
             Crossfade(
@@ -404,7 +465,7 @@ fun MainScreen(navController: NavHostController? = null) {
                         todayWaterMl = todayWaterMl,
                         onStartWorkout = ::startWorkout,
                         onManageRoutines = ::goToRoutines,
-                        onSeeAllRoutines = { selectedScreen = Screen.Workout },
+                        onSeeAllRoutines = { selectedRoute = Screen.Workout.route },
                         onQuickAddWater = { amount ->
                             uid?.let { id ->
                                 coroutineScope.launch { runCatching { FirestoreRepository.addWater(id, amount) } }
@@ -413,7 +474,9 @@ fun MainScreen(navController: NavHostController? = null) {
                         onOpenWaterTracking = { navController?.navigate("waterTracking") },
                         isLoading = isInitialLoading,
                         glassState = glassState,
-                        bottomContentPadding = paddingValues.calculateBottomPadding()
+                        topContentPadding = paddingValues.calculateTopPadding(),
+                        bottomContentPadding = paddingValues.calculateBottomPadding(),
+                        listState = homeListState
                     )
                     is Screen.Stats -> StatsPage(
                         logs = logs,
@@ -422,7 +485,9 @@ fun MainScreen(navController: NavHostController? = null) {
                         isLoading = isInitialLoading,
                         onOpenCalendar = { navController?.navigate("calendar") },
                         glassState = glassState,
-                        bottomContentPadding = paddingValues.calculateBottomPadding()
+                        topContentPadding = paddingValues.calculateTopPadding(),
+                        bottomContentPadding = paddingValues.calculateBottomPadding(),
+                        listState = statsListState
                     )
                     is Screen.Workout -> WorkoutTabPage(
                         routines = routines,
@@ -430,7 +495,9 @@ fun MainScreen(navController: NavHostController? = null) {
                         onManageRoutines = ::goToRoutines,
                         isLoading = isInitialLoading,
                         glassState = glassState,
-                        bottomContentPadding = paddingValues.calculateBottomPadding()
+                        topContentPadding = paddingValues.calculateTopPadding(),
+                        bottomContentPadding = paddingValues.calculateBottomPadding(),
+                        listState = workoutListState
                     )
                     is Screen.Profile -> ProfilePage(
                         profile = profile,
@@ -463,10 +530,15 @@ fun MainScreen(navController: NavHostController? = null) {
                         },
                         isLoading = isInitialLoading,
                         glassState = glassState,
-                        bottomContentPadding = paddingValues.calculateBottomPadding()
+                        topContentPadding = paddingValues.calculateTopPadding(),
+                        bottomContentPadding = paddingValues.calculateBottomPadding(),
+                        listState = profileListState
                     )
                 }
             }
+
+            // Soft fade under the status bar so scrolled content does not clash with the clock and icons
+            StatusBarScrim()
 
             activeAchievementCelebration?.let { tier ->
                 AchievementCelebrationOverlay(tier = tier, onDismiss = { dismissAchievementCelebration() })
@@ -559,7 +631,9 @@ fun HomePage(
     onOpenWaterTracking: () -> Unit = {},
     isLoading: Boolean = false,
     glassState: com.example.apexfitness.ui.theme.GlassState = rememberGlassState(),
-    bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp
+    topContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    bottomContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    listState: LazyListState = rememberLazyListState()
 ) {
     Crossfade(
         targetState = isLoading,
@@ -567,7 +641,7 @@ fun HomePage(
         label = "homeLoadingCrossfade"
     ) { loading ->
         if (loading) {
-            HomeSkeleton(bottomContentPadding = bottomContentPadding)
+            HomeSkeleton(topContentPadding = topContentPadding, bottomContentPadding = bottomContentPadding)
         } else {
             HomeContent(
                 profile = profile,
@@ -580,7 +654,9 @@ fun HomePage(
                 onQuickAddWater = onQuickAddWater,
                 onOpenWaterTracking = onOpenWaterTracking,
                 glassState = glassState,
-                bottomContentPadding = bottomContentPadding
+                topContentPadding = topContentPadding,
+                bottomContentPadding = bottomContentPadding,
+                listState = listState
             )
         }
     }
@@ -598,7 +674,9 @@ private fun HomeContent(
     onQuickAddWater: (Int) -> Unit,
     onOpenWaterTracking: () -> Unit,
     glassState: com.example.apexfitness.ui.theme.GlassState,
-    bottomContentPadding: androidx.compose.ui.unit.Dp
+    topContentPadding: androidx.compose.ui.unit.Dp,
+    bottomContentPadding: androidx.compose.ui.unit.Dp,
+    listState: LazyListState
 ) {
     val today = remember { todayDayCode() }
     val todaysRoutines = remember(routines) { routines.filter { it.days.contains(today) } }
@@ -615,10 +693,11 @@ private fun HomeContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3,
+            top = Dimens.Space3 + topContentPadding,
             bottom = Dimens.Space3 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
@@ -818,14 +897,14 @@ private fun HomeSectionHeader(
 }
 
 @Composable
-private fun HomeSkeleton(bottomContentPadding: androidx.compose.ui.unit.Dp) {
+private fun HomeSkeleton(topContentPadding: androidx.compose.ui.unit.Dp, bottomContentPadding: androidx.compose.ui.unit.Dp) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(
                 start = Dimens.ScreenEdge,
                 end = Dimens.ScreenEdge,
-                top = Dimens.Space3,
+                top = Dimens.Space3 + topContentPadding,
                 bottom = bottomContentPadding
             ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)

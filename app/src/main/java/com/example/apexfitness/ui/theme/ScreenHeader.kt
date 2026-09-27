@@ -1,6 +1,12 @@
 package com.example.apexfitness.ui.theme
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,6 +118,28 @@ fun ApexHeaderAction(
             modifier = Modifier.size(22.dp)
         )
     }
+}
+
+// Soft fade behind the status bar, for screens whose content scrolls under it.
+// Solid at the very top so the clock stays readable, then fades out.
+@Composable
+fun StatusBarScrim(modifier: Modifier = Modifier) {
+    val background = MaterialTheme.colorScheme.background
+    val height = with(LocalDensity.current) { (WindowInsets.statusBars.getTop(this) * 1.6f).toDp() }
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .drawBehind {
+                drawRect(
+                    Brush.verticalGradient(
+                        0f to background,
+                        0.6f to background.copy(alpha = 0.85f),
+                        1f to Color.Transparent
+                    )
+                )
+            }
+    )
 }
 
 @Preview(showBackground = true, widthDp = 360)

@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,7 +78,9 @@ fun StatsPage(
     isLoading: Boolean = false,
     onOpenCalendar: () -> Unit = {},
     glassState: com.example.apexfitness.ui.theme.GlassState = rememberGlassState(),
-    bottomContentPadding: Dp = 0.dp
+    topContentPadding: Dp = 0.dp,
+    bottomContentPadding: Dp = 0.dp,
+    listState: LazyListState = rememberLazyListState()
 ) {
     Crossfade(
         targetState = isLoading,
@@ -84,14 +88,16 @@ fun StatsPage(
         label = "statsLoadingCrossfade"
     ) { loading ->
         if (loading) {
-            StatsSkeleton(bottomContentPadding = bottomContentPadding)
+            StatsSkeleton(topContentPadding = topContentPadding, bottomContentPadding = bottomContentPadding)
         } else {
             StatsContent(
                 logs = logs,
                 personalRecords = personalRecords,
                 onOpenCalendar = onOpenCalendar,
                 glassState = glassState,
-                bottomContentPadding = bottomContentPadding
+                topContentPadding = topContentPadding,
+                bottomContentPadding = bottomContentPadding,
+                listState = listState
             )
         }
     }
@@ -103,7 +109,9 @@ private fun StatsContent(
     personalRecords: List<PersonalRecord>,
     onOpenCalendar: () -> Unit,
     glassState: com.example.apexfitness.ui.theme.GlassState,
-    bottomContentPadding: Dp
+    topContentPadding: Dp,
+    bottomContentPadding: Dp,
+    listState: LazyListState
 ) {
     val weeklyMinutes = remember(logs) { StatsCalculations.last7DaysMinutes(logs) }
     val dayLabels = remember { last7DayLabels() }
@@ -116,10 +124,11 @@ private fun StatsContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3,
+            top = Dimens.Space3 + topContentPadding,
             bottom = Dimens.Space2 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
@@ -580,13 +589,13 @@ private fun PersonalRecordRow(
 // ---- Loading skeleton ----
 
 @Composable
-private fun StatsSkeleton(bottomContentPadding: Dp) {
+private fun StatsSkeleton(topContentPadding: Dp, bottomContentPadding: Dp) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3,
+            top = Dimens.Space3 + topContentPadding,
             bottom = Dimens.Space2 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)

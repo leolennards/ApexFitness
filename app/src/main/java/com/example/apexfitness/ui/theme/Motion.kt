@@ -38,6 +38,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.currentCompositeKeyHash
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -238,12 +239,20 @@ fun Modifier.apexClickable(
 
 // ---- Numbers, progress and list animations ----
 
+// Remembers the last value each counter or bar showed this session, by its place in the UI.
+// Coming back to a tab then starts from where it was, so only numbers that really changed move.
+object ValueMemory {
+    val last = HashMap<Int, Float>()
+}
+
 // Counts up from 0 to the target the first time, then moves smoothly to new values
 @Composable
 fun rememberCountUp(target: Float, durationMillis: Int = Motion.CountUp): State<Float> {
     val enabled = LocalMotionEnabled.current
-    val animatable = remember { Animatable(if (enabled) 0f else target) }
+    val memoryKey = currentCompositeKeyHash
+    val animatable = remember { Animatable(if (enabled) ValueMemory.last[memoryKey] ?: 0f else target) }
     LaunchedEffect(target, enabled) {
+        ValueMemory.last[memoryKey] = target
         if (enabled) {
             animatable.animateTo(target, tween(durationMillis, easing = FastOutSlowInEasing))
         } else {
@@ -264,10 +273,13 @@ fun rememberCountUpInt(target: Int, durationMillis: Int = Motion.CountUp): State
 @Composable
 fun rememberAnimatedProgress(target: Float): State<Float> {
     val enabled = LocalMotionEnabled.current
-    val animatable = remember { Animatable(if (enabled) 0f else target.coerceIn(0f, 1f)) }
-    var firstDone by remember { mutableStateOf(!enabled) }
+    val memoryKey = currentCompositeKeyHash
+    val remembered = ValueMemory.last[memoryKey]
+    val animatable = remember { Animatable(if (enabled) remembered ?: 0f else target.coerceIn(0f, 1f)) }
+    var firstDone by remember { mutableStateOf(!enabled || remembered != null) }
     LaunchedEffect(target, enabled) {
         val clamped = target.coerceIn(0f, 1f)
+        ValueMemory.last[memoryKey] = clamped
         when {
             !enabled -> animatable.snapTo(clamped)
             !firstDone -> {

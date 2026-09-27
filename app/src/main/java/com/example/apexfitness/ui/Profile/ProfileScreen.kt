@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -96,7 +98,9 @@ fun ProfilePage(
     onOpenAchievements: () -> Unit = {},
     isLoading: Boolean = false,
     glassState: com.example.apexfitness.ui.theme.GlassState = rememberGlassState(),
-    bottomContentPadding: Dp = 0.dp
+    topContentPadding: Dp = 0.dp,
+    bottomContentPadding: Dp = 0.dp,
+    listState: LazyListState = rememberLazyListState()
 ) {
     Crossfade(
         targetState = isLoading,
@@ -104,7 +108,7 @@ fun ProfilePage(
         label = "profileLoadingCrossfade"
     ) { loading ->
         if (loading) {
-            ProfileSkeleton(bottomContentPadding = bottomContentPadding)
+            ProfileSkeleton(topContentPadding = topContentPadding, bottomContentPadding = bottomContentPadding)
         } else {
             ProfileContent(
                 profile = profile,
@@ -123,7 +127,9 @@ fun ProfilePage(
                 onShareApp = onShareApp,
                 onOpenAchievements = onOpenAchievements,
                 glassState = glassState,
-                bottomContentPadding = bottomContentPadding
+                topContentPadding = topContentPadding,
+                bottomContentPadding = bottomContentPadding,
+                listState = listState
             )
         }
     }
@@ -149,7 +155,9 @@ private fun ProfileContent(
     onShareApp: () -> Unit,
     onOpenAchievements: () -> Unit,
     glassState: com.example.apexfitness.ui.theme.GlassState,
-    bottomContentPadding: Dp
+    topContentPadding: Dp,
+    bottomContentPadding: Dp,
+    listState: LazyListState
 ) {
     var showSignOutConfirm by remember { mutableStateOf(false) }
     val badgeCount = remember(totalWorkouts) { listOf(1, 5, 10, 25, 50, 100).count { totalWorkouts >= it } }
@@ -173,10 +181,11 @@ private fun ProfileContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        state = listState,
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3,
+            top = Dimens.Space3 + topContentPadding,
             bottom = Dimens.Space2 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
@@ -565,13 +574,13 @@ private fun SignOutButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 // ---- Loading skeleton ----
 
 @Composable
-private fun ProfileSkeleton(bottomContentPadding: Dp) {
+private fun ProfileSkeleton(topContentPadding: Dp, bottomContentPadding: Dp) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3,
+            top = Dimens.Space3 + topContentPadding,
             bottom = Dimens.Space2 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
