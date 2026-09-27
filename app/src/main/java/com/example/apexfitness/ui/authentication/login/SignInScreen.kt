@@ -185,9 +185,9 @@ fun SignInScreen(navController: NavController) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Create Account",
+                        text = "Create account",
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.apex.accentText
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -196,43 +196,28 @@ fun SignInScreen(navController: NavController) {
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(Dimens.Space3))
 
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.staggeredEntrance(index = 0, key = "signin-title")
+                    horizontalAlignment = Alignment.Start,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggeredEntrance(index = 0, key = "signin-title")
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.apex.accentSoft)
-                            .border(Dimens.Hairline, MaterialTheme.apex.accent.copy(alpha = 0.45f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Lock,
-                            contentDescription = null,
-                            tint = MaterialTheme.apex.accentText,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(Dimens.Space3))
                     Text(
-                        text = "Welcome Back",
-                        style = MaterialTheme.typography.headlineLarge,
+                        text = "Welcome back",
+                        style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onBackground,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Start
                     )
                     Spacer(modifier = Modifier.height(Dimens.Space1))
                     Text(
-                        text = "Sign in to continue your fitness journey",
+                        text = "Sign in to pick up where you left off.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.apex.mutedText,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Start
                     )
                 }
 
@@ -296,7 +281,7 @@ fun SignInScreen(navController: NavController) {
                         Text(
                             text = infoMessage.orEmpty(),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.apex.accentText
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -322,9 +307,9 @@ fun SignInScreen(navController: NavController) {
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Forgot Password?",
+                                text = "Forgot password?",
                                 style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.apex.accentText
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -365,7 +350,7 @@ fun SignInScreen(navController: NavController) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 ApexPrimaryButton(
-                    text = if (isLoading) "Signing in" else "Sign In",
+                    text = if (isLoading) "Signing in" else "Sign in",
                     onClick = { signInWithEmail() },
                     enabled = !isLoading,
                     modifier = Modifier.fillMaxWidth()
@@ -389,9 +374,9 @@ fun SignInScreen(navController: NavController) {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Sign Up",
+                            text = "Sign up",
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.apex.accentText
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }

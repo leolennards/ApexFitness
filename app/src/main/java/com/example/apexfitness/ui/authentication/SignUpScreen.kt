@@ -214,37 +214,23 @@ fun SignUpScreen(navController: NavController, formState: OnboardingFormState) {
                 Spacer(modifier = Modifier.height(Dimens.Space2))
 
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.staggeredEntrance(index = 0, key = "signup-title")
+                    horizontalAlignment = Alignment.Start,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggeredEntrance(index = 0, key = "signup-title")
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.apex.accentSoft)
-                            .border(Dimens.Hairline, MaterialTheme.apex.accent.copy(alpha = 0.45f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.PersonAdd,
-                            contentDescription = null,
-                            tint = MaterialTheme.apex.accentText,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(Dimens.Space3))
                     Text(
-                        text = "Create Your Account",
-                        style = MaterialTheme.typography.headlineLarge,
+                        text = "Create your account",
+                        style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onBackground,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Start
                     )
                     Spacer(modifier = Modifier.height(Dimens.Space1))
                     Text(
-                        text = "Start building your best self today",
+                        text = "A few details and you are ready to train.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.apex.mutedText,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Start
                     )
                 }
 
@@ -394,9 +380,9 @@ fun SignUpScreen(navController: NavController, formState: OnboardingFormState) {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Sign In",
+                            text = "Sign in",
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.apex.accentText
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
