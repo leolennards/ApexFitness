@@ -4,7 +4,28 @@ import com.example.apexfitness.ui.settings.UnitPreferences
 import com.example.apexfitness.ui.settings.OnboardingPreferences
 import android.media.AudioManager
 import android.media.ToneGenerator
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterTransition
@@ -327,6 +348,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                     if (currentRoutine != null) {
                         SessionBody(
                             routineName = currentRoutine.name,
+                            startTimeMillis = startTimeMillis,
                             sessionExercises = sessionExercises,
                             restSecondsLeft = restSecondsLeft,
                             restTotalSeconds = restTotalSeconds,
@@ -373,9 +395,13 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     }
 }
 
+// What sits in the bar at the bottom of the workout
+private enum class SessionBottomMode { Rest, Prompt, Finish }
+
 @Composable
 private fun SessionBody(
     routineName: String,
+    startTimeMillis: Long,
     sessionExercises: List<ExerciseSession>,
     restSecondsLeft: Int,
     restTotalSeconds: Int,
@@ -405,12 +431,11 @@ private fun SessionBody(
     // The exercise with the next set to do. -1 once everything is checked off.
     val currentExerciseIndex = sessionExercises.indexOfFirst { session -> session.sets.any { !it.completed } }
     val currentExerciseNumber = if (currentExerciseIndex >= 0) currentExerciseIndex + 1 else totalExercises
+    val allDone = totalSets > 0 && doneSets == totalSets
     val statusLabel = when {
-        restSecondsLeft > 0 && isRestPaused -> "REST PAUSED"
-        restSecondsLeft > 0 -> "RESTING"
         totalExercises == 0 -> "NO EXERCISES"
-        currentExerciseIndex < 0 -> "ALL DONE  ·  $doneSets OF $totalSets SETS"
-        else -> "EXERCISE $currentExerciseNumber OF $totalExercises  ·  $doneSets OF $totalSets SETS"
+        allDone -> "ALL SETS DONE"
+        else -> "EXERCISE $currentExerciseNumber OF $totalExercises"
     }
     var showDiscardConfirm by remember { mutableStateOf(false) }
     var showFinishConfirm by remember { mutableStateOf(false) }
@@ -424,95 +449,133 @@ private fun SessionBody(
         }
     }
 
+    fun requestClose() {
+        if (doneSets > 0) showDiscardConfirm = true else onClose()
+    }
+
+    // The back gesture asks too, same as the close button, so a swipe can't throw a workout away
+    BackHandler(enabled = doneSets > 0 && !isSaving) { showDiscardConfirm = true }
+
+    // Keep the screen on during a workout so the phone does not lock between sets
+    val view = LocalView.current
+    DisposableEffect(view) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
+
+    val bottomMode = when {
+        restSecondsLeft > 0 -> SessionBottomMode.Rest
+        restPromptSeconds != null -> SessionBottomMode.Prompt
+        else -> SessionBottomMode.Finish
+    }
+    // The list gets extra space at the bottom so the last set is never stuck under the bar
+    val density = LocalDensity.current
+    var bottomBarHeight by remember { mutableStateOf(0.dp) }
+    val background = MaterialTheme.colorScheme.background
+
     Box(modifier = Modifier.fillMaxSize()) {
-        // The body scrolls underneath the header
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            contentPadding = PaddingValues(
-                start = Dimens.ScreenEdge,
-                top = 96.dp,
-                end = Dimens.ScreenEdge,
-                bottom = Dimens.Space4
-            ),
-            verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
-        ) {
-            if (showGlossary) {
-                item {
-                    WorkoutGlossaryCard(
-                        glassState = glassState,
-                        onDismiss = onDismissGlossary,
-                        modifier = Modifier.padding(bottom = Dimens.Space1)
+        Column(modifier = Modifier.fillMaxSize()) {
+            SessionHeader(
+                routineName = routineName,
+                statusLabel = statusLabel,
+                onClose = { requestClose() }
+            )
+            SessionClock(
+                startTimeMillis = startTimeMillis,
+                doneSets = doneSets,
+                totalSets = totalSets,
+                progress = sessionProgress
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                state = listState,
+                contentPadding = PaddingValues(
+                    start = Dimens.ScreenEdge,
+                    top = Dimens.Space2,
+                    end = Dimens.ScreenEdge,
+                    bottom = bottomBarHeight + Dimens.Space3
+                ),
+                verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
+            ) {
+                if (showGlossary) {
+                    item(key = "glossary") {
+                        WorkoutGlossaryCard(
+                            glassState = glassState,
+                            onDismiss = onDismissGlossary,
+                            modifier = Modifier.padding(bottom = Dimens.Space1)
+                        )
+                    }
+                }
+                items(sessionExercises.size, key = { index -> "exercise-$index" }) { index ->
+                    val session = sessionExercises[index]
+                    val isDone = session.sets.isNotEmpty() && session.sets.all { it.completed }
+                    val isCurrent = !isDone && index == currentExerciseIndex
+                    SessionExerciseCard(
+                        session = session,
+                        history = history[session.exercise.name.trim().lowercase()],
+                        onSetCompleted = { onSetCompleted(session) },
+                        onSwap = { onSwapRequested(index) },
+                        isCurrent = isCurrent,
+                        isDone = isDone,
+                        modifier = Modifier.staggeredEntrance(index)
                     )
                 }
             }
-            items(sessionExercises.size) { index ->
-                val session = sessionExercises[index]
-                val isDone = session.sets.isNotEmpty() && session.sets.all { it.completed }
-                val isCurrent = !isDone && index == currentExerciseIndex
-                SessionExerciseCard(
-                    session = session,
-                    glassState = glassState,
-                    history = history[session.exercise.name.trim().lowercase()],
-                    onSetCompleted = { onSetCompleted(session) },
-                    onSwap = { onSwapRequested(index) },
-                    isCurrent = isCurrent,
-                    isDone = isDone,
-                    modifier = Modifier.staggeredEntrance(index)
-                )
-            }
         }
 
-        SessionHeader(
-            routineName = routineName,
-            statusLabel = statusLabel,
-            progress = sessionProgress,
-            isSaving = isSaving,
-            onClose = { if (doneSets > 0) showDiscardConfirm = true else onClose() },
-            onFinish = { if (totalSets > 0 && doneSets < totalSets) showFinishConfirm = true else onFinish() },
-            modifier = Modifier.align(Alignment.TopCenter)
+        // Soft fade so the list slides under the bottom bar instead of being cut off
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(bottomBarHeight + Dimens.Space3)
+                .background(Brush.verticalGradient(listOf(background.copy(alpha = 0f), background, background)))
         )
 
-        // Rest timer pops up after a set is done and goes away when the rest ends or is skipped
-        AnimatedVisibility(
-            visible = restSecondsLeft > 0,
+        // One bar at a time: the rest timer, the "rest now?" prompt, or Finish
+        AnimatedContent(
+            targetState = bottomMode,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(start = Dimens.ScreenEdge, end = Dimens.ScreenEdge, bottom = Dimens.Space3),
-            enter = fadeIn(apexTween(motionEnabled, Motion.Standard)) +
-                slideInVertically(apexSpring(motionEnabled)) { it / 3 },
-            exit = fadeOut(apexTween(motionEnabled, Motion.Micro + 30)) +
-                slideOutVertically(apexSpring(motionEnabled)) { it / 3 }
-        ) {
-            RestTimerOverlay(
-                secondsLeft = restSecondsLeft,
-                totalSeconds = restTotalSeconds,
-                isPaused = isRestPaused,
-                glassState = glassState,
-                onPauseResume = onPauseResume,
-                onSkip = onSkip,
-                onAdjust = onAdjust,
-                onPreset = onPreset
-            )
-        }
-
-        // Shown after a set is ticked off. Rest never starts on its own - the user chooses when.
-        AnimatedVisibility(
-            visible = restPromptSeconds != null && restSecondsLeft <= 0,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(start = Dimens.ScreenEdge, end = Dimens.ScreenEdge, bottom = Dimens.Space3),
-            enter = fadeIn(apexTween(motionEnabled, Motion.Standard)) +
-                slideInVertically(apexSpring(motionEnabled)) { it / 3 },
-            exit = fadeOut(apexTween(motionEnabled, Motion.Micro + 30)) +
-                slideOutVertically(apexSpring(motionEnabled)) { it / 3 }
-        ) {
-            RestPromptBar(
-                seconds = restPromptSeconds ?: 0,
-                glassState = glassState,
-                onStart = { onStartRestPrompt(restPromptSeconds ?: 0) },
-                onDismiss = onDismissRestPrompt
-            )
+                .fillMaxWidth()
+                .onSizeChanged { bottomBarHeight = with(density) { it.height.toDp() } }
+                .padding(horizontal = Dimens.ScreenEdge, vertical = Dimens.Space2),
+            transitionSpec = {
+                if (motionEnabled) {
+                    (fadeIn(apexTween(true, Motion.Standard)) + slideInVertically(apexSpring(true)) { it / 3 }) togetherWith
+                        (fadeOut(apexTween(true, Motion.Micro + 30)) + slideOutVertically(apexSpring(true)) { it / 3 }) using
+                        SizeTransform(clip = false)
+                } else {
+                    EnterTransition.None togetherWith ExitTransition.None
+                }
+            },
+            label = "sessionBottomBar"
+        ) { mode ->
+            when (mode) {
+                SessionBottomMode.Rest -> RestDock(
+                    secondsLeft = restSecondsLeft,
+                    totalSeconds = restTotalSeconds,
+                    isPaused = isRestPaused,
+                    glassState = glassState,
+                    onPauseResume = onPauseResume,
+                    onSkip = onSkip,
+                    onAdjust = onAdjust,
+                    onPreset = onPreset
+                )
+                SessionBottomMode.Prompt -> RestPromptBar(
+                    seconds = restPromptSeconds ?: 0,
+                    glassState = glassState,
+                    onStart = { onStartRestPrompt(restPromptSeconds ?: 0) },
+                    onDismiss = onDismissRestPrompt
+                )
+                SessionBottomMode.Finish -> FinishBar(
+                    allDone = allDone,
+                    isSaving = isSaving,
+                    onFinish = { if (totalSets > 0 && doneSets < totalSets) showFinishConfirm = true else onFinish() }
+                )
+            }
         }
     }
 
@@ -595,66 +658,138 @@ private fun SessionBody(
     }
 }
 
-// Header with close, routine name and the Finish button
+// Close button, routine name and where you are in the workout
 @Composable
 private fun SessionHeader(
     routineName: String,
     statusLabel: String,
-    progress: Float,
-    isSaving: Boolean,
     onClose: () -> Unit,
-    onFinish: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = Dimens.ScreenEdge, vertical = Dimens.Space1),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(Dimens.MinTouchTarget)
+                .apexClickable(onClick = onClose)
+                .clip(CircleShape)
+                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = "Close workout",
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(Dimens.Space2))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = routineName,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Text(
+                text = statusLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.apex.mutedText
+            )
+        }
+    }
+}
+
+// The hero of the screen: how long you have been training, plus sets done and a thin progress line
+@Composable
+private fun SessionClock(
+    startTimeMillis: Long,
+    doneSets: Int,
+    totalSets: Int,
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    // Ticks once a second on the second. Only this small part redraws, not the whole screen.
+    val elapsedSeconds by produceState(initialValue = secondsSince(startTimeMillis), startTimeMillis) {
+        while (true) {
+            value = secondsSince(startTimeMillis)
+            delay(1000L - (System.currentTimeMillis() - startTimeMillis) % 1000L)
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
+            .padding(start = Dimens.ScreenEdge, end = Dimens.ScreenEdge, top = Dimens.Space1)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Dimens.ScreenEdge, vertical = Dimens.Space1),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(Dimens.MinTouchTarget)
-                    .apexClickable(onClick = onClose)
-                    .clip(CircleShape)
-                    .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = "Close",
-                    tint = glassContentColor(),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(Dimens.Space2))
+        Row(verticalAlignment = Alignment.Bottom) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = routineName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = glassContentColor(),
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                RollingText(
+                    text = formatClock(elapsedSeconds),
+                    style = ApexText.HeroNumeral.copy(fontSize = 64.sp, lineHeight = 66.sp),
+                    color = MaterialTheme.colorScheme.onBackground
                 )
-                Text(
-                    text = statusLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = glassMutedContentColor()
-                )
+                Text(text = "ELAPSED", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.apex.mutedText)
             }
-            Spacer(modifier = Modifier.width(Dimens.Space1))
-            ApexPrimaryButton(
-                text = if (isSaving) "Saving" else "Finish",
-                onClick = onFinish,
-                enabled = !isSaving
+            MetricBlock(
+                value = "$doneSets/$totalSets",
+                label = "SETS",
+                valueStyle = ApexText.NumeralSmall,
+                horizontalAlignment = Alignment.End,
+                valueColor = MaterialTheme.colorScheme.onBackground
             )
         }
+        Spacer(modifier = Modifier.height(Dimens.Space2))
         ApexProgressBar(progress = progress, height = 2.dp)
+    }
+}
+
+private fun secondsSince(startMillis: Long): Int =
+    ((System.currentTimeMillis() - startMillis) / 1000L).toInt().coerceAtLeast(0)
+
+// 4:05 under an hour, 1:04:05 after that
+private fun formatClock(totalSeconds: Int): String {
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
+}
+
+// Finish is quiet while sets are left and becomes the main button once everything is ticked off
+@Composable
+private fun FinishBar(
+    allDone: Boolean,
+    isSaving: Boolean,
+    onFinish: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Crossfade(
+        targetState = allDone,
+        animationSpec = motionTween(Motion.Standard),
+        modifier = modifier.fillMaxWidth(),
+        label = "finishBar"
+    ) { done ->
+        val text = if (isSaving) "Saving" else "Finish workout"
+        if (done) {
+            ApexPrimaryButton(
+                text = text,
+                onClick = onFinish,
+                enabled = !isSaving,
+                icon = Icons.Outlined.Check,
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            ApexSecondaryButton(
+                text = text,
+                onClick = onFinish,
+                enabled = !isSaving,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 
@@ -663,11 +798,18 @@ private fun SessionSkeleton() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(start = Dimens.ScreenEdge, end = Dimens.ScreenEdge, top = 96.dp),
+            .padding(horizontal = Dimens.ScreenEdge, vertical = Dimens.Space1),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
     ) {
-        repeat(3) {
-            SkeletonBlock(modifier = Modifier.fillMaxWidth().height(184.dp), shape = CardShape)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SkeletonCircle(size = Dimens.MinTouchTarget)
+            Spacer(modifier = Modifier.width(Dimens.Space2))
+            SkeletonBlock(modifier = Modifier.width(160.dp).height(18.dp))
+        }
+        SkeletonBlock(modifier = Modifier.width(150.dp).height(60.dp))
+        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(2.dp))
+        repeat(2) {
+            SkeletonBlock(modifier = Modifier.fillMaxWidth().height(220.dp), shape = CardShape)
         }
     }
 }
@@ -681,7 +823,7 @@ private fun RoutineNotFound(onBack: () -> Unit) {
     ) {
         Text(
             text = "Routine not found",
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(modifier = Modifier.height(Dimens.Space3))
@@ -714,51 +856,39 @@ private fun RestPromptBar(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val contentColor = glassContentColor()
-    val mutedColor = glassMutedContentColor()
-
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .glassPanel(glassState, shape = CardShape)
-            .padding(horizontal = Dimens.Space3, vertical = Dimens.Space2),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .glassPanel(glassState, shape = RoundedCornerShape(28.dp))
+            .padding(start = Dimens.Space3, end = Dimens.Space1, top = Dimens.Space1, bottom = Dimens.Space1),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Nice set!",
-                style = MaterialTheme.typography.labelMedium,
-                color = mutedColor
+                text = "SET DONE",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.apex.mutedText
             )
             Text(
-                text = "Rest for ${formatRestTime(seconds)}?",
-                style = MaterialTheme.typography.titleMedium,
-                color = contentColor
+                text = "Rest ${formatRestTime(seconds)}",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
-
-        Spacer(modifier = Modifier.width(Dimens.Space2))
-
-        TextButton(onClick = onDismiss) {
-            Text("Not now")
-        }
-
-        Spacer(modifier = Modifier.width(Dimens.Space1))
-
-        Button(
-            onClick = onStart,
+        TextButton(
+            onClick = onDismiss,
             modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
         ) {
-            Icon(Icons.Outlined.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(Dimens.Space1))
-            Text("Start rest")
+            Text(text = "Not now", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.apex.mutedText)
         }
+        ApexPrimaryButton(text = "Start", onClick = onStart, icon = Icons.Outlined.PlayArrow)
     }
 }
 
+// Rest timer docked at the bottom. Small by default (ring, time, pause, skip) so the sets stay visible.
+// Tap the time to open the extra controls: +/-15 seconds and the preset lengths.
 @Composable
-private fun RestTimerOverlay(
+private fun RestDock(
     secondsLeft: Int,
     totalSeconds: Int,
     isPaused: Boolean,
@@ -770,11 +900,12 @@ private fun RestTimerOverlay(
     modifier: Modifier = Modifier
 ) {
     val motionEnabled = LocalMotionEnabled.current
-    val contentColor = glassContentColor()
-    val mutedColor = glassMutedContentColor()
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val mutedColor = MaterialTheme.apex.mutedText
     val accentColor = MaterialTheme.apex.accent
     val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val total = totalSeconds.coerceAtLeast(1)
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     // The ring drains a little every second. This is the only linear animation, because it shows real time passing.
     // A bigger jump (+/-15s or a preset) uses a spring instead.
@@ -795,7 +926,7 @@ private fun RestTimerOverlay(
     val pulse = remember { Animatable(1f) }
     LaunchedEffect(secondsLeft) {
         if (motionEnabled && !isPaused && secondsLeft in 1..3) {
-            pulse.animateTo(1.04f, tween(Motion.Micro, easing = FastOutSlowInEasing))
+            pulse.animateTo(1.06f, tween(Motion.Micro, easing = FastOutSlowInEasing))
             pulse.animateTo(1f, tween(Motion.Fade, easing = FastOutSlowInEasing))
         }
     }
@@ -803,40 +934,24 @@ private fun RestTimerOverlay(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .glassPanel(glassState, shape = CardShape)
-            .padding(Dimens.Space3),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .glassPanel(glassState, shape = RoundedCornerShape(28.dp))
+            .animateContentSize(apexSpring(motionEnabled))
+            .padding(horizontal = Dimens.Space2, vertical = 12.dp)
     ) {
-        Text(
-            text = "REST",
-            style = MaterialTheme.typography.labelMedium,
-            color = mutedColor
-        )
-        Spacer(modifier = Modifier.height(Dimens.Space1))
-
-        Box(
-            modifier = Modifier
-                .size(136.dp)
-                .graphicsLayer {
-                    scaleX = pulse.value
-                    scaleY = pulse.value
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val strokeWidth = 6.dp.toPx()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Canvas(
+                modifier = Modifier
+                    .size(52.dp)
+                    .graphicsLayer {
+                        scaleX = pulse.value
+                        scaleY = pulse.value
+                    }
+            ) {
+                val strokeWidth = 4.dp.toPx()
                 val inset = strokeWidth / 2f
                 val arcSize = androidx.compose.ui.geometry.Size(size.width - strokeWidth, size.height - strokeWidth)
                 val topLeft = androidx.compose.ui.geometry.Offset(inset, inset)
-                drawArc(
-                    color = trackColor,
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
+                drawArc(color = trackColor, startAngle = -90f, sweepAngle = 360f, useCenter = false, topLeft = topLeft, size = arcSize, style = Stroke(width = strokeWidth))
                 drawArc(
                     color = accentColor,
                     startAngle = -90f,
@@ -847,74 +962,87 @@ private fun RestTimerOverlay(
                     style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                 )
             }
-            AnimatedContent(
-                targetState = secondsLeft,
-                transitionSpec = {
-                    if (motionEnabled) {
-                        (fadeIn(apexTween(motionEnabled, Motion.Micro)) +
-                            slideInVertically(apexSpring(motionEnabled)) { it / 3 }) togetherWith
-                            (fadeOut(apexTween(motionEnabled, Motion.Micro)) +
-                                slideOutVertically(apexSpring(motionEnabled)) { -it / 3 })
-                    } else {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    }
-                },
-                label = "restDigits"
-            ) { seconds ->
-                Text(
-                    text = formatRestTime(seconds),
-                    style = ApexText.Numeral,
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = Dimens.MinTouchTarget)
+                    .apexClickable(haptic = false, pressedScale = 1f) { expanded = !expanded }
+                    .semantics { contentDescription = if (expanded) "Hide rest options" else "Show rest options" },
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (isPaused) "REST PAUSED" else "REST",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = mutedColor
+                    )
+                    Icon(
+                        imageVector = if (expanded) Icons.Outlined.ExpandMore else Icons.Outlined.ExpandLess,
+                        contentDescription = null,
+                        tint = mutedColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                RollingText(
+                    text = formatRestTime(secondsLeft),
+                    style = ApexText.Numeral.copy(fontSize = 34.sp, lineHeight = 38.sp),
                     color = contentColor
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.height(Dimens.Space2))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space2), verticalAlignment = Alignment.CenterVertically) {
-            RestTimerIconButton(icon = Icons.Outlined.Remove, contentDescription = "Subtract 15 seconds", onClick = { onAdjust(-15) })
             RestTimerIconButton(
                 icon = if (isPaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
                 contentDescription = if (isPaused) "Resume rest" else "Pause rest",
                 onClick = onPauseResume,
                 emphasized = true
             )
+            Spacer(modifier = Modifier.width(Dimens.Space1))
             RestTimerIconButton(icon = Icons.Outlined.SkipNext, contentDescription = "Skip rest", onClick = onSkip)
-            RestTimerIconButton(icon = Icons.Outlined.Add, contentDescription = "Add 15 seconds", onClick = { onAdjust(15) })
         }
 
-        Spacer(modifier = Modifier.height(Dimens.Space1))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space1)) {
-            RestTimerPresets.forEach { presetSeconds ->
-                val isActivePreset = totalSeconds == presetSeconds
-                // The outer box is the 48dp tap area, the visible pill is smaller
-                Box(
-                    modifier = Modifier
-                        .heightIn(min = Dimens.MinTouchTarget)
-                        .apexClickable(onClick = { onPreset(presetSeconds) }),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(PillShape)
-                            .background(if (isActivePreset) MaterialTheme.apex.accentSoft else Color.Transparent)
-                            .border(
-                                Dimens.Hairline,
-                                if (isActivePreset) accentColor else MaterialTheme.apex.hairline,
-                                PillShape
-                            )
-                            .padding(horizontal = Dimens.Space2, vertical = Dimens.Space1)
-                    ) {
-                        Text(
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(apexTween(motionEnabled, Motion.Fade)) + expandVertically(apexSpring(motionEnabled)),
+            exit = fadeOut(apexTween(motionEnabled, Motion.Micro)) + shrinkVertically(apexSpring(motionEnabled))
+        ) {
+            Column(modifier = Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(Dimens.Space1)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space1)) {
+                    RestChip(text = "-15s", selected = false, onClick = { onAdjust(-15) }, modifier = Modifier.weight(1f))
+                    RestChip(text = "+15s", selected = false, onClick = { onAdjust(15) }, modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space1)) {
+                    RestTimerPresets.forEach { presetSeconds ->
+                        RestChip(
                             text = formatRestTime(presetSeconds),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (isActivePreset) MaterialTheme.apex.accentText else mutedColor
+                            selected = totalSeconds == presetSeconds,
+                            onClick = { onPreset(presetSeconds) },
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
         }
+    }
+}
+
+// Pill used for the rest presets and the +/-15s buttons. 48dp tall so it is easy to hit.
+@Composable
+private fun RestChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val accent = MaterialTheme.apex.accent
+    Box(
+        modifier = modifier
+            .heightIn(min = Dimens.MinTouchTarget)
+            .apexClickable(onClick = onClick)
+            .clip(PillShape)
+            .background(if (selected) MaterialTheme.apex.accentSoft else MaterialTheme.colorScheme.background)
+            .border(Dimens.Hairline, if (selected) accent else MaterialTheme.apex.hairline, PillShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.apex.accentText else MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
@@ -925,10 +1053,9 @@ private fun RestTimerIconButton(
     onClick: () -> Unit,
     emphasized: Boolean = false
 ) {
-    val size = if (emphasized) 56.dp else Dimens.MinTouchTarget
     Box(
         modifier = Modifier
-            .size(size)
+            .size(Dimens.MinTouchTarget)
             .apexClickable(onClick = onClick)
             .clip(CircleShape)
             .background(if (emphasized) MaterialTheme.apex.accentSoft else Color.Transparent)
@@ -942,7 +1069,7 @@ private fun RestTimerIconButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = if (emphasized) MaterialTheme.apex.accentText else glassContentColor(),
+            tint = if (emphasized) MaterialTheme.apex.accentText else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(22.dp)
         )
     }
@@ -984,22 +1111,20 @@ private fun WorkoutGlossaryCard(
     }
 }
 
-// Small "CURRENT" / "DONE" label shown on an exercise card during a workout
+// Small "NOW" / "DONE" label shown on an exercise card during a workout
 @Composable
 private fun ExerciseStatusPill(text: String, accent: Boolean) {
-    val accentColor = MaterialTheme.apex.accent
-    val mutedColor = glassMutedContentColor()
     Box(
         modifier = Modifier
             .clip(PillShape)
             .background(if (accent) MaterialTheme.apex.accentSoft else Color.Transparent)
-            .border(Dimens.Hairline, if (accent) accentColor else MaterialTheme.apex.hairline, PillShape)
-            .padding(horizontal = Dimens.Space2, vertical = 4.dp)
+            .then(if (accent) Modifier else Modifier.border(Dimens.Hairline, MaterialTheme.apex.hairline, PillShape))
+            .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
-            color = if (accent) MaterialTheme.apex.accentText else mutedColor
+            color = if (accent) MaterialTheme.apex.accentText else MaterialTheme.apex.mutedText
         )
     }
 }
@@ -1007,7 +1132,6 @@ private fun ExerciseStatusPill(text: String, accent: Boolean) {
 @Composable
 private fun SessionExerciseCard(
     session: ExerciseSession,
-    glassState: com.example.apexfitness.ui.theme.GlassState,
     onSetCompleted: () -> Unit,
     modifier: Modifier = Modifier,
     history: ExerciseHistory? = null,
@@ -1015,8 +1139,8 @@ private fun SessionExerciseCard(
     isDone: Boolean = false,
     onSwap: () -> Unit = {}
 ) {
-    val contentColor = glassContentColor()
-    val mutedColor = glassMutedContentColor()
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val mutedColor = MaterialTheme.apex.mutedText
     val haptics = rememberHaptics()
     val useLbs = UnitPreferences.useLbs.collectAsState().value
     val tip = remember(session.exercise.name) { ExerciseInfo.find(session.exercise.name) }
@@ -1027,46 +1151,41 @@ private fun SessionExerciseCard(
         if (isCurrent) showTip = true
     }
 
-    // "80 kg x 8" for a weighted set, "12 reps" for bodyweight
+    // "80 kg × 8" for a weighted set, "12 reps" for bodyweight
     fun describe(weightKg: Double, reps: Int): String =
         if (weightKg > 0) {
-            "${UnitPreferences.format(UnitPreferences.fromKg(weightKg, useLbs))} ${UnitPreferences.label(useLbs)} x $reps"
+            "${UnitPreferences.format(UnitPreferences.fromKg(weightKg, useLbs))} ${UnitPreferences.label(useLbs)} × $reps"
         } else {
             "$reps reps"
         }
     val previousParts = buildList {
-        history?.lastSet?.let { add("Last: ${describe(it.weight, it.reps)}") }
-        history?.best?.takeIf { it.bestWeight > 0 || it.bestReps > 0 }?.let { add("Best: ${describe(it.bestWeight, it.bestReps)}") }
+        history?.lastSet?.let { add("Last ${describe(it.weight, it.reps)}") }
+        history?.best?.takeIf { it.bestWeight > 0 || it.bestReps > 0 }?.let { add("Best ${describe(it.bestWeight, it.bestReps)}") }
     }
 
-    val accentColor = MaterialTheme.apex.accent
+    // The current exercise gets an accent border instead of the hairline, so it stands out without a second border
+    val borderColor = if (isCurrent) MaterialTheme.apex.accent else MaterialTheme.apex.hairline
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .glassPanel(glassState, shape = CardShape)
-            .then(
-                if (isCurrent) {
-                    Modifier.border(1.dp, accentColor, CardShape)
-                } else {
-                    Modifier
-                }
-            )
-            .alpha(if (isDone) 0.6f else 1f)
-            .padding(Dimens.Space3)
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(Dimens.Hairline, borderColor, RoundedCornerShape(24.dp))
+            .alpha(if (isDone) 0.7f else 1f)
+            .padding(start = Dimens.Space3, end = Dimens.Space2, top = Dimens.Space2, bottom = Dimens.Space2)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = session.exercise.name,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineSmall,
                 color = contentColor,
                 modifier = Modifier.weight(1f)
             )
             if (isDone) {
                 ExerciseStatusPill(text = "DONE", accent = false)
             } else if (isCurrent) {
-                ExerciseStatusPill(text = "CURRENT", accent = true)
+                ExerciseStatusPill(text = "NOW", accent = true)
             }
-            Spacer(modifier = Modifier.width(Dimens.Space1))
             Box(
                 modifier = Modifier
                     .size(Dimens.MinTouchTarget)
@@ -1097,22 +1216,27 @@ private fun SessionExerciseCard(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Info,
-                        contentDescription = "Exercise tip",
+                        contentDescription = if (showTip) "Hide exercise tip" else "Show exercise tip",
                         tint = if (showTip) MaterialTheme.apex.accentText else mutedColor,
                         modifier = Modifier.size(20.dp)
                     )
                 }
             }
             if (showTip) {
-                Text(text = tip.tip, style = MaterialTheme.typography.bodySmall, color = contentColor)
+                Text(
+                    text = tip.tip,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor,
+                    modifier = Modifier.padding(end = Dimens.Space1)
+                )
                 Spacer(modifier = Modifier.height(Dimens.Space1))
             }
         }
         if (previousParts.isNotEmpty()) {
             Text(
-                text = previousParts.joinToString("   ·   "),
+                text = previousParts.joinToString("  ·  "),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.apex.accentText
+                color = mutedColor
             )
         }
         if (session.exercise.notes.isNotBlank()) {
@@ -1121,36 +1245,46 @@ private fun SessionExerciseCard(
         Spacer(modifier = Modifier.height(Dimens.Space2))
 
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "SET", style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.weight(0.5f))
-            Text(text = "REPS", style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.weight(1f))
-            Text(text = "WEIGHT (${UnitPreferences.label(UnitPreferences.useLbs.collectAsState().value).uppercase()})", style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(Dimens.MinTouchTarget))
+            Text(text = "SET", style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.width(36.dp))
+            Text(text = "REPS", style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            Spacer(modifier = Modifier.width(Dimens.Space1))
+            Text(text = UnitPreferences.label(useLbs).uppercase(), style = MaterialTheme.typography.labelSmall, color = mutedColor, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            Spacer(modifier = Modifier.width(Dimens.MinTouchTarget + 4.dp))
         }
-        Spacer(modifier = Modifier.height(Dimens.Space1))
+        Spacer(modifier = Modifier.height(4.dp))
 
         session.sets.forEachIndexed { index, set ->
+            val numberColor = if (set.completed) mutedColor else contentColor
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "${index + 1}",
                     style = MaterialTheme.typography.titleMedium,
                     color = mutedColor,
-                    modifier = Modifier.weight(0.5f)
+                    modifier = Modifier.width(36.dp)
                 )
                 SessionNumberField(
                     value = set.reps,
                     onValueChange = { set.reps = it },
-                    contentColor = contentColor,
-                    modifier = Modifier.weight(1f).padding(end = 6.dp)
+                    contentColor = numberColor,
+                    keyboardType = KeyboardType.Number,
+                    description = "Reps, set ${index + 1}",
+                    modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(Dimens.Space1))
                 SessionNumberField(
                     value = set.weight,
                     onValueChange = { set.weight = it },
-                    contentColor = contentColor,
-                    modifier = Modifier.weight(1f).padding(end = 6.dp)
+                    contentColor = numberColor,
+                    keyboardType = KeyboardType.Decimal,
+                    description = "Weight, set ${index + 1}",
+                    modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(4.dp))
                 SetCheck(
                     completed = set.completed,
                     onToggle = {
@@ -1164,7 +1298,7 @@ private fun SessionExerciseCard(
     }
 }
 
-// Set done toggle: 48dp tap area around a 30dp circle that turns accent when done
+// Set done toggle: 48dp tap area around a 34dp circle that fills with the accent when done
 @Composable
 private fun SetCheck(completed: Boolean, onToggle: () -> Unit) {
     val apex = MaterialTheme.apex
@@ -1186,12 +1320,12 @@ private fun SetCheck(completed: Boolean, onToggle: () -> Unit) {
     ) {
         Box(
             modifier = Modifier
-                .size(30.dp)
+                .size(34.dp)
                 .clip(CircleShape)
-                .background(fill)
+                .drawBehind { drawRect(fill) }
                 .border(
-                    Dimens.Hairline,
-                    if (completed) apex.accent else apex.mutedText.copy(alpha = 0.7f),
+                    1.5.dp,
+                    if (completed) apex.accent else apex.mutedText.copy(alpha = 0.5f),
                     CircleShape
                 ),
             contentAlignment = Alignment.Center
@@ -1211,37 +1345,58 @@ private fun SetCheck(completed: Boolean, onToggle: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// Reps and weight are the most important numbers in a workout, so they are big and easy to tap.
+// No box around them, just a soft background. The accent outline shows which one is being edited.
 @Composable
 private fun SessionNumberField(
     value: String,
     onValueChange: (String) -> Unit,
     contentColor: Color,
+    keyboardType: KeyboardType,
+    description: String,
     modifier: Modifier = Modifier
 ) {
-    // Reps and weight are the main numbers, so they are big and centred
-    OutlinedTextField(
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
+    val accent = MaterialTheme.apex.accent
+    val outline by animateColorAsState(
+        targetValue = if (focused) accent else Color.Transparent,
+        animationSpec = motionTween(Motion.Micro),
+        label = "numberFieldOutline"
+    )
+    val style = ApexText.Numeral.copy(
+        fontSize = 30.sp,
+        lineHeight = 34.sp,
+        color = contentColor,
+        textAlign = TextAlign.Center
+    )
+    val fieldShape = ApexShapes.small
+    BasicTextField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        modifier = modifier,
-        textStyle = ApexText.Numeral.copy(
-            fontSize = 18.sp,
-            lineHeight = 22.sp,
-            color = contentColor,
-            textAlign = TextAlign.Center
-        ),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.apex.accent,
-            unfocusedBorderColor = MaterialTheme.apex.hairline,
-            focusedTextColor = contentColor,
-            unfocusedTextColor = contentColor,
-            cursorColor = MaterialTheme.apex.accent,
-            focusedContainerColor = MaterialTheme.colorScheme.background,
-            unfocusedContainerColor = MaterialTheme.colorScheme.background
-        ),
-        shape = ApexShapes.small
+        textStyle = style,
+        cursorBrush = SolidColor(accent),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Next),
+        interactionSource = interactionSource,
+        modifier = modifier.semantics { contentDescription = description },
+        decorationBox = { innerTextField ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp)
+                    .clip(fieldShape)
+                    .background(MaterialTheme.colorScheme.background)
+                    .border(Dimens.Hairline, outline, fieldShape)
+                    .padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (value.isEmpty()) {
+                    Text(text = "–", style = style.copy(color = MaterialTheme.apex.mutedText))
+                }
+                innerTextField()
+            }
+        }
     )
 }
 
@@ -1286,10 +1441,10 @@ private fun WorkoutSessionScreenDarkPreview() {
 
 @Preview(showBackground = true, widthDp = 380, name = "Rest timer")
 @Composable
-private fun RestTimerOverlayPreview() {
+private fun RestDockPreview() {
     ApexFitnessTheme(darkTheme = false) {
         Box(modifier = Modifier.padding(Dimens.ScreenEdge)) {
-            RestTimerOverlay(
+            RestDock(
                 secondsLeft = 42,
                 totalSeconds = 60,
                 isPaused = false,
