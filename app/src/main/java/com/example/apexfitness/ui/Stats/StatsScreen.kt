@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +27,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.automirrored.outlined.TrendingDown
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.sp
+import com.example.apexfitness.ui.theme.MetricBlock
+import com.example.apexfitness.ui.theme.rememberHaptics
+import kotlin.math.roundToInt
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +41,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -116,11 +126,12 @@ private fun StatsContent(
     val weeklyMinutes = remember(logs) { StatsCalculations.last7DaysMinutes(logs) }
     val dayLabels = remember { last7DayLabels() }
     val caloriesThisWeek = remember(logs) { StatsCalculations.caloriesThisWeek(logs) }
-    val badgeCount = remember(logs) { listOf(1, 5, 10, 25, 50, 100).count { logs.size >= it } }
+    val workoutsThisWeek = remember(logs) { StatsCalculations.workoutsThisWeek(logs) }
     val useLbs = UnitPreferences.useLbs.collectAsState().value
     val weeklyVolume = remember(logs) { StatsCalculations.weeklyVolume(logs) }
     val volumeWeekLabels = remember { volumeTrendLabels(weeklyVolume.size) }
     val muscleGroupBreakdown = remember(logs) { StatsCalculations.muscleGroupBreakdown(logs) }
+    val unit = UnitPreferences.label(useLbs)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -128,8 +139,8 @@ private fun StatsContent(
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3 + topContentPadding,
-            bottom = Dimens.Space2 + bottomContentPadding
+            top = Dimens.Space2 + topContentPadding,
+            bottom = Dimens.Space3 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
     ) {
@@ -141,17 +152,22 @@ private fun StatsContent(
         }
 
         item(key = "stats-hero") {
-            StatsHeroCard(
+            StatsHero(
+                volumeThisWeek = UnitPreferences.fromKg(weeklyVolume.lastOrNull() ?: 0.0, useLbs),
+                volumeLastWeek = UnitPreferences.fromKg(weeklyVolume.getOrNull(weeklyVolume.size - 2) ?: 0.0, useLbs),
+                unit = unit,
+                minutes = weeklyMinutes.sum(),
+                workouts = workoutsThisWeek,
                 calories = caloriesThisWeek,
-                badges = badgeCount,
-                glassState = glassState,
-                modifier = Modifier.staggeredEntrance(index = 1, key = "stats-hero")
+                modifier = Modifier
+                    .padding(top = Dimens.Space1)
+                    .staggeredEntrance(index = 1, key = "stats-hero")
             )
         }
 
         item(key = "stats-weekly") {
             StatsSection(
-                title = "Weekly Activity",
+                title = "Weekly activity",
                 subtitle = "Minutes trained, last 7 days",
                 modifier = Modifier
                     .padding(top = Dimens.Space2)
@@ -161,8 +177,9 @@ private fun StatsContent(
                     values = weeklyMinutes.map { it.toFloat() },
                     labels = dayLabels,
                     minScale = 30f,
-                    headline = "${weeklyMinutes.sum()}",
-                    headlineLabel = "MINUTES",
+                    totalLabel = "MIN THIS WEEK",
+                    valueSuffix = "MIN",
+                    chartName = "Minutes trained per day",
                     glassState = glassState
                 )
             }
@@ -170,8 +187,8 @@ private fun StatsContent(
 
         item(key = "stats-volume") {
             StatsSection(
-                title = "Training Volume",
-                subtitle = "Weight x reps on completed sets, last 8 weeks",
+                title = "Training volume",
+                subtitle = "Weight × reps on completed sets, per week",
                 modifier = Modifier
                     .padding(top = Dimens.Space2)
                     .staggeredEntrance(index = 3, key = "stats-volume")
@@ -180,8 +197,9 @@ private fun StatsContent(
                     values = weeklyVolume.map { UnitPreferences.fromKg(it, useLbs).toFloat() },
                     labels = volumeWeekLabels,
                     minScale = 1f,
-                    headline = "${UnitPreferences.fromKg(weeklyVolume.sum(), useLbs).toInt()}",
-                    headlineLabel = "${UnitPreferences.label(useLbs).uppercase()} TOTAL",
+                    totalLabel = "${unit.uppercase()} OVER 8 WEEKS",
+                    valueSuffix = unit.uppercase(),
+                    chartName = "Training volume per week",
                     glassState = glassState
                 )
             }
@@ -189,8 +207,8 @@ private fun StatsContent(
 
         item(key = "stats-muscle") {
             StatsSection(
-                title = "Muscle Group Focus",
-                subtitle = "Completed sets by category, last 4 weeks",
+                title = "Muscle focus",
+                subtitle = "Completed sets by group, last 4 weeks",
                 modifier = Modifier
                     .padding(top = Dimens.Space2)
                     .staggeredEntrance(index = 4, key = "stats-muscle")
@@ -206,31 +224,22 @@ private fun StatsContent(
             }
         }
 
-        item(key = "stats-records-header") {
-            StatsSectionHeader(
-                title = "Personal Records",
+        item(key = "stats-records") {
+            StatsSection(
+                title = "Personal records",
                 subtitle = "Your best lifts",
                 modifier = Modifier
                     .padding(top = Dimens.Space2)
-                    .staggeredEntrance(index = 5, key = "stats-records-header")
-            )
-        }
-
-        if (personalRecords.isEmpty()) {
-            item(key = "stats-records-empty") {
-                EmptyStatsCard(
-                    text = "Log a workout and your best lifts will show up here.",
-                    glassState = glassState,
-                    modifier = Modifier.staggeredEntrance(index = 6, key = "stats-records-empty")
-                )
-            }
-        } else {
-            itemsIndexed(personalRecords, key = { _, record -> "record-${record.exerciseName}" }) { index, record ->
-                PersonalRecordRow(
-                    record = record,
-                    glassState = glassState,
-                    modifier = Modifier.staggeredEntrance(index = 6 + index, key = "stats-record-${record.exerciseName}")
-                )
+                    .staggeredEntrance(index = 5, key = "stats-records")
+            ) {
+                if (personalRecords.isEmpty()) {
+                    EmptyStatsCard(
+                        text = "Log a workout and your best lifts will show up here.",
+                        glassState = glassState
+                    )
+                } else {
+                    PersonalRecordsCard(records = personalRecords, useLbs = useLbs, glassState = glassState)
+                }
             }
         }
     }
@@ -263,12 +272,13 @@ private fun StatsHeader(onOpenCalendar: () -> Unit, modifier: Modifier = Modifie
                 .size(Dimens.MinTouchTarget)
                 .apexClickable(onClick = onOpenCalendar)
                 .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface)
                 .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Outlined.CalendarMonth,
-                contentDescription = "Calendar",
+                contentDescription = "Open calendar",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(22.dp)
             )
@@ -276,70 +286,87 @@ private fun StatsHeader(onOpenCalendar: () -> Unit, modifier: Modifier = Modifie
     }
 }
 
-// The two big numbers for the week. They count up the first time the screen shows.
+// The hero: this week's training volume, how it compares with last week,
+// then minutes, workouts and calories as three smaller numbers.
 @Composable
-private fun StatsHeroCard(
+private fun StatsHero(
+    volumeThisWeek: Double,
+    volumeLastWeek: Double,
+    unit: String,
+    minutes: Int,
+    workouts: Int,
     calories: Int,
-    badges: Int,
-    glassState: com.example.apexfitness.ui.theme.GlassState,
     modifier: Modifier = Modifier
 ) {
-    val animatedCalories by rememberCountUpInt(calories)
-    val animatedBadges by rememberCountUpInt(badges)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .glassPanel(glassState, shape = CardShape)
-            .padding(vertical = Dimens.Space3),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        HeroStat(
-            value = "$animatedCalories",
-            label = "KCAL THIS WEEK",
-            modifier = Modifier.weight(1f)
-        )
-        Box(
-            modifier = Modifier
-                .width(Dimens.Hairline)
-                .height(56.dp)
-                .background(MaterialTheme.apex.hairline)
-        )
-        HeroStat(
-            value = "$animatedBadges",
-            label = "BADGES EARNED",
-            modifier = Modifier.weight(1f)
-        )
+    val shownVolume by rememberCountUpInt(volumeThisWeek.roundToInt())
+    val shownMinutes by rememberCountUpInt(minutes)
+    val shownWorkouts by rememberCountUpInt(workouts)
+    val shownCalories by rememberCountUpInt(calories)
+    // Change against last week, only when there is a last week to compare with
+    val change = if (volumeLastWeek > 0.0) ((volumeThisWeek - volumeLastWeek) / volumeLastWeek * 100).roundToInt() else null
+    val valueColor = MaterialTheme.colorScheme.onBackground
+    val muted = MaterialTheme.apex.mutedText
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(text = "VOLUME THIS WEEK", style = MaterialTheme.typography.labelMedium, color = muted)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(text = groupThousands(shownVolume), style = ApexText.HeroNumeral, color = valueColor, maxLines = 1)
+            Text(
+                text = " $unit",
+                style = MaterialTheme.typography.titleMedium,
+                color = muted,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+        }
+        if (change != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (change >= 0) Icons.AutoMirrored.Outlined.TrendingUp else Icons.AutoMirrored.Outlined.TrendingDown,
+                    contentDescription = null,
+                    tint = valueColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "${if (change >= 0) "+" else ""}$change% vs last week",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = muted
+                )
+            }
+        } else {
+            Text(text = "Rolling 7 days", style = MaterialTheme.typography.bodyMedium, color = muted)
+        }
+        Spacer(modifier = Modifier.height(Dimens.Space3))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val small = ApexText.NumeralSmall.copy(fontSize = 30.sp, lineHeight = 34.sp)
+            MetricBlock(value = groupThousands(shownMinutes), label = "MINUTES", modifier = Modifier.weight(1f), valueStyle = small, valueColor = valueColor)
+            HeroDivider()
+            MetricBlock(value = "$shownWorkouts", label = "WORKOUTS", modifier = Modifier.weight(1f), valueStyle = small, valueColor = valueColor)
+            HeroDivider()
+            MetricBlock(value = groupThousands(shownCalories), label = "KCAL (EST.)", modifier = Modifier.weight(1f), valueStyle = small, valueColor = valueColor)
+        }
     }
 }
 
 @Composable
-private fun HeroStat(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(horizontal = Dimens.Space2),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = value,
-            style = ApexText.Numeral,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.apex.mutedText,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
+private fun HeroDivider() {
+    Box(
+        modifier = Modifier
+            .width(Dimens.Hairline)
+            .height(36.dp)
+            .background(MaterialTheme.apex.hairline)
+    )
 }
 
 // ---- Sections ----
 
 @Composable
-private fun StatsSectionHeader(title: String, subtitle: String, modifier: Modifier = Modifier) {
+private fun StatsSection(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = title,
@@ -351,18 +378,6 @@ private fun StatsSectionHeader(title: String, subtitle: String, modifier: Modifi
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.apex.mutedText
         )
-    }
-}
-
-@Composable
-private fun StatsSection(
-    title: String,
-    subtitle: String,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        StatsSectionHeader(title = title, subtitle = subtitle)
         Spacer(modifier = Modifier.height(Dimens.Space2))
         content()
     }
@@ -390,15 +405,17 @@ private fun EmptyStatsCard(
 
 // ---- Bar chart ----
 
-// Card with a big total and a row of bars. The bars grow from 0 the first time they show,
-// and the last bar (today or this week) uses the full accent colour.
+// Card with a big number and a row of bars. The big number is the total until you tap a bar,
+// then it shows that bar's value (tap it again to go back to the total).
+// The current day or week is the full accent colour, the rest are lighter. Bars grow from 0 the first time.
 @Composable
 private fun BarChartCard(
     values: List<Float>,
     labels: List<String>,
     minScale: Float,
-    headline: String,
-    headlineLabel: String,
+    totalLabel: String,
+    valueSuffix: String,
+    chartName: String,
     glassState: com.example.apexfitness.ui.theme.GlassState,
     modifier: Modifier = Modifier
 ) {
@@ -406,22 +423,31 @@ private fun BarChartCard(
     val progress = rememberAnimatedProgress(1f)
     val accent = MaterialTheme.apex.accent
     val emptyBar = MaterialTheme.apex.hairline
+    val baseline = MaterialTheme.apex.hairline
     val mutedColor = MaterialTheme.apex.mutedText
-    val currentLabelColor = MaterialTheme.apex.accentText
-    val summary = "$headline ${headlineLabel.lowercase()}"
+    val strongColor = MaterialTheme.colorScheme.onSurface
+    val haptics = rememberHaptics()
+    var selected by remember(values.size) { mutableStateOf<Int?>(null) }
+    val highlighted = selected ?: values.lastIndex
+
+    val headline = selected?.let { groupThousands(values[it].roundToInt()) } ?: groupThousands(values.sum().roundToInt())
+    val headlineLabel = selected?.let { "$valueSuffix · ${labels.getOrElse(it) { "" }.uppercase()}" } ?: totalLabel
+    // TalkBack reads every value, so nothing is only shown as a bar height
+    val description = chartName + ": " + values.indices.joinToString(", ") { i ->
+        "${labels.getOrElse(i) { "" }} ${values[i].roundToInt()}"
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .glassPanel(glassState, shape = CardShape)
             .padding(Dimens.Space3)
-            .semantics { contentDescription = summary }
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = headline,
-                style = ApexText.NumeralSmall,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = ApexText.Numeral,
+                color = strongColor,
                 maxLines = 1
             )
             Spacer(modifier = Modifier.width(Dimens.Space1))
@@ -429,7 +455,8 @@ private fun BarChartCard(
                 text = headlineLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = mutedColor,
-                modifier = Modifier.padding(bottom = 4.dp)
+                modifier = Modifier.padding(bottom = 8.dp),
+                maxLines = 1
             )
         }
         Spacer(modifier = Modifier.height(Dimens.Space2))
@@ -437,21 +464,32 @@ private fun BarChartCard(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(96.dp)
+                .height(112.dp)
+                .semantics { contentDescription = description }
+                .pointerInput(values.size) {
+                    detectTapGestures { offset ->
+                        if (values.isEmpty()) return@detectTapGestures
+                        val slot = size.width.toFloat() / values.size
+                        val index = (offset.x / slot).toInt().coerceIn(0, values.lastIndex)
+                        selected = if (selected == index) null else index
+                        haptics.tick()
+                    }
+                }
         ) {
             val slot = size.width / values.size.coerceAtLeast(1)
-            val barWidth = 10.dp.toPx()
+            val barWidth = minOf(14.dp.toPx(), slot * 0.5f)
             val minBar = 4.dp.toPx()
-            val radius = CornerRadius(barWidth / 2f)
+            val radius = CornerRadius(4.dp.toPx())
+            // Faint baseline so empty days still read as "zero", not missing
+            drawLine(baseline, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
             values.forEachIndexed { index, value ->
                 val fraction = (value / maxValue).coerceIn(0f, 1f)
                 val fullHeight = if (value <= 0f) minBar else minBar + (size.height - minBar) * fraction
-                val barHeight = (minBar + (fullHeight - minBar) * progress.value)
-                val isCurrent = index == values.lastIndex
+                val barHeight = minBar + (fullHeight - minBar) * progress.value
                 val color = when {
                     value <= 0f -> emptyBar
-                    isCurrent -> accent
-                    else -> accent.copy(alpha = 0.55f)
+                    index == highlighted -> accent
+                    else -> accent.copy(alpha = 0.35f)
                 }
                 drawRoundRect(
                     color = color,
@@ -471,7 +509,7 @@ private fun BarChartCard(
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (index == labels.lastIndex) currentLabelColor else mutedColor,
+                    color = if (index == highlighted) strongColor else mutedColor,
                     maxLines = 1
                 )
             }
@@ -499,8 +537,7 @@ private fun MuscleGroupCard(
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Bottom
                 ) {
                     Text(
                         text = category,
@@ -511,12 +548,18 @@ private fun MuscleGroupCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "$count sets",
+                        text = "$count",
+                        style = ApexText.NumeralSmall.copy(fontSize = 20.sp, lineHeight = 22.sp),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = " sets",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.apex.mutedText
+                        color = MaterialTheme.apex.mutedText,
+                        modifier = Modifier.padding(bottom = 2.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(Dimens.Space1))
+                Spacer(modifier = Modifier.height(6.dp))
                 ApexProgressBar(
                     progress = (count.toFloat() / maxCount.toFloat()).coerceIn(0f, 1f),
                     height = 6.dp
@@ -528,40 +571,44 @@ private fun MuscleGroupCard(
 
 // ---- Personal records ----
 
+// All records in one grouped card with thin dividers
 @Composable
-private fun PersonalRecordRow(
-    record: PersonalRecord,
+private fun PersonalRecordsCard(
+    records: List<PersonalRecord>,
+    useLbs: Boolean,
     glassState: com.example.apexfitness.ui.theme.GlassState,
     modifier: Modifier = Modifier
 ) {
-    val useLbs = UnitPreferences.useLbs.collectAsState().value
-    val result = if (record.bestWeight > 0) {
-        "${formatWeight(UnitPreferences.fromKg(record.bestWeight, useLbs))} ${UnitPreferences.label(useLbs)} x ${record.bestReps}"
-    } else {
-        "${record.bestReps} reps"
-    }
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .glassPanel(glassState, shape = CardShape)
-            .padding(horizontal = Dimens.Space2, vertical = Dimens.Space2),
+    ) {
+        records.forEachIndexed { index, record ->
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = Dimens.Space3)
+                        .fillMaxWidth()
+                        .height(Dimens.Hairline)
+                        .background(MaterialTheme.apex.hairline)
+                )
+            }
+            PersonalRecordRow(record = record, useLbs = useLbs)
+        }
+    }
+}
+
+@Composable
+private fun PersonalRecordRow(record: PersonalRecord, useLbs: Boolean) {
+    val weighted = record.bestWeight > 0
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .padding(horizontal = Dimens.Space3, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(Dimens.MinTouchTarget)
-                .clip(CircleShape)
-                .background(MaterialTheme.apex.accentSoft),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.TrendingUp,
-                contentDescription = null,
-                tint = MaterialTheme.apex.accentText,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(Dimens.Space2))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = record.exerciseName,
@@ -571,18 +618,26 @@ private fun PersonalRecordRow(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = if (record.bestWeight > 0) "BEST LIFT" else "BEST SET",
+                text = if (weighted) "BEST LIFT" else "BEST SET",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.apex.mutedText
             )
         }
-        Spacer(modifier = Modifier.width(Dimens.Space1))
-        Text(
-            text = result,
-            style = ApexText.NumeralSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1
-        )
+        Spacer(modifier = Modifier.width(Dimens.Space2))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = if (weighted) formatWeight(UnitPreferences.fromKg(record.bestWeight, useLbs)) else "${record.bestReps}",
+                style = ApexText.NumeralSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+            Text(
+                text = if (weighted) " ${UnitPreferences.label(useLbs)} × ${record.bestReps}" else " reps",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.apex.mutedText,
+                modifier = Modifier.padding(bottom = 3.dp)
+            )
+        }
     }
 }
 
@@ -590,55 +645,33 @@ private fun PersonalRecordRow(
 
 @Composable
 private fun StatsSkeleton(topContentPadding: Dp, bottomContentPadding: Dp) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = Dimens.ScreenEdge,
-            end = Dimens.ScreenEdge,
-            top = Dimens.Space3 + topContentPadding,
-            bottom = Dimens.Space2 + bottomContentPadding
-        ),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(
+                start = Dimens.ScreenEdge,
+                end = Dimens.ScreenEdge,
+                top = Dimens.Space2 + topContentPadding,
+                bottom = bottomContentPadding
+            ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
     ) {
-        item {
-            Column {
-                SkeletonBlock(modifier = Modifier.width(110.dp).height(12.dp))
-                Spacer(modifier = Modifier.height(Dimens.Space1))
-                SkeletonBlock(modifier = Modifier.width(180.dp).height(32.dp))
-            }
+        SkeletonBlock(modifier = Modifier.width(110.dp).height(12.dp))
+        SkeletonBlock(modifier = Modifier.width(180.dp).height(32.dp))
+        Spacer(modifier = Modifier.height(Dimens.Space1))
+        SkeletonBlock(modifier = Modifier.width(120.dp).height(12.dp))
+        SkeletonBlock(modifier = Modifier.width(200.dp).height(64.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space3)) {
+            repeat(3) { SkeletonBlock(modifier = Modifier.weight(1f).height(48.dp)) }
         }
-        item {
-            SkeletonBlock(
-                modifier = Modifier.fillMaxWidth().height(112.dp),
-                shape = CardShape
-            )
-        }
-        item {
-            Column(modifier = Modifier.padding(top = Dimens.Space2)) {
-                SkeletonBlock(modifier = Modifier.width(150.dp).height(22.dp))
-                Spacer(modifier = Modifier.height(Dimens.Space2))
-                SkeletonBlock(
-                    modifier = Modifier.fillMaxWidth().height(200.dp),
-                    shape = CardShape
-                )
-            }
-        }
-        item {
-            Column(
-                modifier = Modifier.padding(top = Dimens.Space2),
-                verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
-            ) {
-                SkeletonBlock(modifier = Modifier.width(170.dp).height(22.dp))
-                repeat(3) {
-                    SkeletonBlock(
-                        modifier = Modifier.fillMaxWidth().height(80.dp),
-                        shape = CardShape
-                    )
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(Dimens.Space1))
+        SkeletonBlock(modifier = Modifier.width(150.dp).height(22.dp))
+        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(220.dp), shape = CardShape)
     }
 }
+
+// 12450 becomes "12,450" (or "12 450", depending on the phone's region)
+private fun groupThousands(value: Int): String = "%,d".format(value)
 
 // ---- Helpers ----
 
