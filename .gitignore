@@ -24,4 +24,7 @@ build/
 
 # Personal notes and temp files
 DESIGN_BRIEF.txt
+CLAUDE.md
+Claude outputs/
+store_assets/
 _R.json
