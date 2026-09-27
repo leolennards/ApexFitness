@@ -2,7 +2,8 @@ package com.example.apexfitness.ui.settings
 
 import androidx.compose.runtime.collectAsState
 import android.Manifest
-import android.app.TimePickerDialog
+import android.content.Context
+import java.util.Calendar
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -52,6 +53,15 @@ import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDefaults
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.widthIn
+import com.example.apexfitness.ui.theme.ApexScreenHeader
+import com.example.apexfitness.ui.theme.PillShape
+import com.example.apexfitness.ui.theme.motionTween
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -73,6 +83,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -308,16 +319,35 @@ fun SettingsScreen(
         )
     }
 
+    // Reminder time picker (Material 3, so it matches the rest of the app)
+    var showTimePicker by remember { mutableStateOf(false) }
+    val use24Hour = remember { android.text.format.DateFormat.is24HourFormat(context) }
+    if (showTimePicker) {
+        ReminderTimeDialog(
+            hour = reminderHour,
+            minute = reminderMinute,
+            is24Hour = use24Hour,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { hour, minute ->
+                showTimePicker = false
+                onReminderTimeChange(hour, minute)
+            }
+        )
+    }
+
+    // Real version name from the build, so I never have to update it by hand
+    val versionName = remember {
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
+    }
+
     val motionEnabled = LocalMotionEnabled.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .navigationBarsPadding()
     ) {
-        SettingsHeader(onBack = { navController.popBackStack() })
+        ApexScreenHeader(title = "Settings", onBack = { navController.popBackStack() })
 
         Column(
             modifier = Modifier
@@ -332,12 +362,12 @@ fun SettingsScreen(
                 modifier = Modifier.staggeredEntrance(index = 0, key = "settings-appearance")
             ) {
                 SettingsCard(glassState = glassState) {
-                    SettingsToggleRow(
+                    SettingsSegmentedRow(
                         icon = Icons.Outlined.DarkMode,
-                        title = "Dark Mode",
-                        subtitle = if (isDarkMode) "On" else "Off",
-                        checked = isDarkMode,
-                        onCheckedChange = onToggleDarkMode
+                        title = "Theme",
+                        options = listOf("Light", "Dark"),
+                        selectedIndex = if (isDarkMode) 1 else 0,
+                        onSelect = { index -> onToggleDarkMode(index == 1) }
                     )
                 }
             }
@@ -347,26 +377,26 @@ fun SettingsScreen(
                 modifier = Modifier.staggeredEntrance(index = 1, key = "settings-units")
             ) {
                 SettingsCard(glassState = glassState) {
-                    SettingsToggleRow(
+                    SettingsSegmentedRow(
                         icon = Icons.Outlined.MonitorWeight,
-                        title = "Use pounds (lb)",
-                        subtitle = if (useLbs) "Weights are shown in lb" else "Weights are shown in kg",
-                        checked = useLbs,
-                        onCheckedChange = { UnitPreferences.setUseLbs(context.applicationContext, it) }
+                        title = "Weight unit",
+                        options = listOf("kg", "lb"),
+                        selectedIndex = if (useLbs) 1 else 0,
+                        onSelect = { index -> UnitPreferences.setUseLbs(context.applicationContext, index == 1) }
                     )
                 }
             }
 
             SettingsSection(
                 label = "Notifications",
-                modifier = Modifier.staggeredEntrance(index = 1, key = "settings-notifications")
+                modifier = Modifier.staggeredEntrance(index = 2, key = "settings-notifications")
             ) {
                 SettingsCard(glassState = glassState) {
                     SettingsToggleRow(
                         icon = Icons.Outlined.NotificationsNone,
                         title = "Workout Reminders",
                         subtitle = if (notificationsEnabled) {
-                            "On · ${formatReminderTime(reminderHour, reminderMinute)}"
+                            "On · ${formatReminderTime(context, reminderHour, reminderMinute)}"
                         } else {
                             "Off"
                         },
@@ -396,16 +426,9 @@ fun SettingsScreen(
                             RowDivider()
                             SettingsNavRow(
                                 icon = Icons.Outlined.AccessTime,
-                                title = "Reminder Time · ${formatReminderTime(reminderHour, reminderMinute)}",
-                                onClick = {
-                                    TimePickerDialog(
-                                        context,
-                                        { _, hour, minute -> onReminderTimeChange(hour, minute) },
-                                        reminderHour,
-                                        reminderMinute,
-                                        false
-                                    ).show()
-                                }
+                                title = "Reminder time",
+                                value = formatReminderTime(context, reminderHour, reminderMinute),
+                                onClick = { showTimePicker = true }
                             )
                         }
                     }
@@ -414,12 +437,12 @@ fun SettingsScreen(
 
             SettingsSection(
                 label = "Account",
-                modifier = Modifier.staggeredEntrance(index = 2, key = "settings-account")
+                modifier = Modifier.staggeredEntrance(index = 3, key = "settings-account")
             ) {
                 SettingsCard(glassState = glassState) {
                     SettingsNavRow(
                         icon = Icons.Outlined.Person,
-                        title = "Edit Profile",
+                        title = "Edit profile",
                         onClick = { navController.navigate("editProfile") }
                     )
                     RowDivider()
@@ -438,7 +461,7 @@ fun SettingsScreen(
 
             SettingsSection(
                 label = "Data",
-                modifier = Modifier.staggeredEntrance(index = 3, key = "settings-data")
+                modifier = Modifier.staggeredEntrance(index = 4, key = "settings-data")
             ) {
                 SettingsCard(glassState = glassState) {
                     SettingsNavRow(
@@ -451,12 +474,12 @@ fun SettingsScreen(
 
             SettingsSection(
                 label = "About",
-                modifier = Modifier.staggeredEntrance(index = 3, key = "settings-about")
+                modifier = Modifier.staggeredEntrance(index = 5, key = "settings-about")
             ) {
                 SettingsCard(glassState = glassState) {
                     SettingsNavRow(
                         icon = Icons.Outlined.PrivacyTip,
-                        title = "Privacy Policy",
+                        title = "Privacy policy",
                         onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL))) }
                     )
                     RowDivider()
@@ -508,18 +531,18 @@ fun SettingsScreen(
                     SettingsInfoRow(
                         icon = Icons.Outlined.Info,
                         title = "Version",
-                        value = "1.0.0"
+                        value = versionName
                     )
                 }
             }
 
             Text(
-                text = "ApexFitness - built to help you plan, train and track, all in one place.",
+                text = "ApexFitness. Built to help you plan, train and track, all in one place.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.apex.mutedText,
                 modifier = Modifier
                     .padding(vertical = Dimens.Space2)
-                    .staggeredEntrance(index = 4, key = "settings-footer")
+                    .staggeredEntrance(index = 6, key = "settings-footer")
             )
 
             Spacer(modifier = Modifier.height(Dimens.Space3))
@@ -527,46 +550,146 @@ fun SettingsScreen(
     }
 }
 
-// Formats the time for display, e.g. "6:00 PM"
-private fun formatReminderTime(hour: Int, minute: Int): String {
-    val amPm = if (hour < 12) "AM" else "PM"
-    val displayHour = when {
-        hour == 0 -> 12
-        hour > 12 -> hour - 12
-        else -> hour
+// Formats the time the way the phone is set up, e.g. "6:00 PM" or "18:00"
+private fun formatReminderTime(context: Context, hour: Int, minute: Int): String {
+    val calendar = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
     }
-    return String.format("%d:%02d %s", displayHour, minute, amPm)
+    return android.text.format.DateFormat.getTimeFormat(context).format(calendar.time)
 }
 
+// Material 3 time picker in a dialog, styled with the app colours
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsHeader(onBack: () -> Unit) {
+private fun ReminderTimeDialog(
+    hour: Int,
+    minute: Int,
+    is24Hour: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (Int, Int) -> Unit
+) {
+    val state = rememberTimePickerState(initialHour = hour, initialMinute = minute, is24Hour = is24Hour)
+    val apex = MaterialTheme.apex
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = ApexShapes.large,
+        title = {
+            Text(
+                text = "Reminder time",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            TimePicker(
+                state = state,
+                colors = TimePickerDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    clockDialColor = MaterialTheme.colorScheme.background,
+                    clockDialSelectedContentColor = apex.onAccent,
+                    clockDialUnselectedContentColor = MaterialTheme.colorScheme.onSurface,
+                    selectorColor = apex.accent,
+                    periodSelectorBorderColor = apex.hairline,
+                    periodSelectorSelectedContainerColor = apex.accentSoft,
+                    periodSelectorSelectedContentColor = apex.accentText,
+                    periodSelectorUnselectedContainerColor = MaterialTheme.colorScheme.surface,
+                    periodSelectorUnselectedContentColor = apex.mutedText,
+                    timeSelectorSelectedContainerColor = apex.accentSoft,
+                    timeSelectorSelectedContentColor = apex.accentText,
+                    timeSelectorUnselectedContainerColor = MaterialTheme.colorScheme.background,
+                    timeSelectorUnselectedContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(state.hour, state.minute) },
+                modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+            ) {
+                Text(text = "Save", style = MaterialTheme.typography.labelLarge, color = apex.accentText)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
+            ) {
+                Text(text = "Cancel", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    )
+}
+
+// Two or three choices side by side in a pill, e.g. Light / Dark or kg / lb.
+// The chosen one is filled with the accent, like the active state of a switch.
+@Composable
+private fun SettingsSegmentedRow(
+    icon: ImageVector,
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    val haptics = rememberHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = Dimens.Space1, vertical = Dimens.Space1),
+            .heightIn(min = 64.dp)
+            .padding(horizontal = Dimens.Space2),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(Dimens.MinTouchTarget)
-                .apexClickable(onClick = onBack)
-                .clip(CircleShape)
-                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(22.dp)
-            )
-        }
+        RowIcon(icon)
         Spacer(modifier = Modifier.width(Dimens.Space2))
         Text(
-            text = "Settings",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
         )
+        Row(
+            modifier = Modifier
+                .clip(PillShape)
+                .background(MaterialTheme.colorScheme.background)
+                .border(Dimens.Hairline, MaterialTheme.apex.hairline, PillShape)
+                .padding(3.dp)
+        ) {
+            options.forEachIndexed { index, option ->
+                val selected = index == selectedIndex
+                val fill by animateColorAsState(
+                    targetValue = if (selected) MaterialTheme.apex.accent else Color.Transparent,
+                    animationSpec = motionTween(Motion.Fade),
+                    label = "segmentFill"
+                )
+                val textColor by animateColorAsState(
+                    targetValue = if (selected) MaterialTheme.apex.onAccent else MaterialTheme.apex.mutedText,
+                    animationSpec = motionTween(Motion.Fade),
+                    label = "segmentText"
+                )
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 42.dp)
+                        .widthIn(min = 60.dp)
+                        .clip(PillShape)
+                        .background(fill)
+                        .apexClickable(haptic = false, pressedScale = 1f) {
+                            if (!selected) {
+                                haptics.toggle(true)
+                                onSelect(index)
+                            }
+                        }
+                        .semantics {
+                            role = Role.RadioButton
+                            this.selected = selected
+                        }
+                        .padding(horizontal = Dimens.Space2),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = option, style = MaterialTheme.typography.labelLarge, color = textColor)
+                }
+            }
+        }
     }
 }
 
@@ -609,7 +732,7 @@ private fun RowDivider() {
 }
 
 @Composable
-private fun RowIcon(icon: ImageVector, tint: Color = MaterialTheme.apex.accentText) {
+private fun RowIcon(icon: ImageVector, tint: Color = MaterialTheme.apex.mutedText) {
     Icon(
         imageVector = icon,
         contentDescription = null,
@@ -674,7 +797,8 @@ private fun SettingsNavRow(
     icon: ImageVector,
     title: String,
     onClick: () -> Unit,
-    tint: Color? = null
+    tint: Color? = null,
+    value: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -684,7 +808,7 @@ private fun SettingsNavRow(
             .padding(horizontal = Dimens.Space2),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RowIcon(icon, tint ?: MaterialTheme.apex.accentText)
+        RowIcon(icon, tint ?: MaterialTheme.apex.mutedText)
         Spacer(modifier = Modifier.width(Dimens.Space2))
         Text(
             text = title,
@@ -692,6 +816,10 @@ private fun SettingsNavRow(
             color = tint ?: MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
+        if (value != null) {
+            Text(text = value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.apex.mutedText)
+            Spacer(modifier = Modifier.width(4.dp))
+        }
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
             contentDescription = null,
