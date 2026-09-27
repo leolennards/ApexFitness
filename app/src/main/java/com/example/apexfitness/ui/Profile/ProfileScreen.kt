@@ -25,6 +25,10 @@ import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.sp
+import com.example.apexfitness.ui.theme.MetricBlock
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.MilitaryTech
@@ -135,7 +139,10 @@ fun ProfilePage(
     }
 }
 
-private data class MenuEntry(val title: String, val icon: ImageVector, val onClick: () -> Unit)
+private data class MenuEntry(val title: String, val icon: ImageVector, val onClick: () -> Unit, val detail: String? = null)
+
+// Menu rows grouped by what they are about, so it reads as three short lists instead of one long one
+private data class MenuGroup(val label: String, val entries: List<MenuEntry>)
 
 @Composable
 private fun ProfileContent(
@@ -167,16 +174,32 @@ private fun ProfileContent(
     val displayName = profile?.name?.trim().takeUnless { it.isNullOrBlank() } ?: "Your Profile"
     val initials = displayName.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }
 
-    val menuItems = listOf(
-        MenuEntry("Edit Profile", Icons.Outlined.EditNote, onEditProfile),
-        MenuEntry("Activity History", Icons.Outlined.History, onOpenActivityHistory),
-        MenuEntry("Challenges", Icons.Outlined.Flag, onOpenChallenges),
-        MenuEntry("Cardio", Icons.AutoMirrored.Outlined.DirectionsRun, onOpenCardio),
-        MenuEntry("Body Progress", Icons.Outlined.MonitorWeight, onOpenBody),
-        MenuEntry("Progress Photos", Icons.Outlined.PhotoCamera, onOpenPhotos),
-        MenuEntry("Health Data", Icons.Outlined.MonitorHeart, onOpenHealthData),
-        MenuEntry("Settings", Icons.Outlined.Settings, onOpenSettings),
-        MenuEntry("Share App", Icons.Outlined.Share, onShareApp)
+    val menuGroups = listOf(
+        MenuGroup(
+            "Training",
+            listOf(
+                MenuEntry("Activity History", Icons.Outlined.History, onOpenActivityHistory),
+                MenuEntry("Achievements", Icons.Outlined.MilitaryTech, onOpenAchievements, detail = "$badgeCount of 6"),
+                MenuEntry("Challenges", Icons.Outlined.Flag, onOpenChallenges),
+                MenuEntry("Cardio", Icons.AutoMirrored.Outlined.DirectionsRun, onOpenCardio)
+            )
+        ),
+        MenuGroup(
+            "Body",
+            listOf(
+                MenuEntry("Body Progress", Icons.Outlined.MonitorWeight, onOpenBody),
+                MenuEntry("Progress Photos", Icons.Outlined.PhotoCamera, onOpenPhotos),
+                MenuEntry("Health Data", Icons.Outlined.MonitorHeart, onOpenHealthData)
+            )
+        ),
+        MenuGroup(
+            "Account",
+            listOf(
+                MenuEntry("Edit Profile", Icons.Outlined.EditNote, onEditProfile),
+                MenuEntry("Settings", Icons.Outlined.Settings, onOpenSettings),
+                MenuEntry("Share App", Icons.Outlined.Share, onShareApp)
+            )
+        )
     )
 
     LazyColumn(
@@ -185,29 +208,20 @@ private fun ProfileContent(
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3 + topContentPadding,
-            bottom = Dimens.Space2 + bottomContentPadding
+            top = Dimens.Space2 + topContentPadding,
+            bottom = Dimens.Space3 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
     ) {
-        item(key = "profile-header") {
-            Text(
-                text = "Profile",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.staggeredEntrance(index = 0, key = "profile-header")
-            )
-        }
-
         item(key = "profile-identity") {
-            IdentityCard(
+            IdentityHeader(
                 displayName = displayName,
                 initials = initials,
                 email = profile?.email.orEmpty(),
                 memberSince = memberSince,
                 fitnessLevel = profile?.fitnessLevel.orEmpty(),
-                glassState = glassState,
-                modifier = Modifier.staggeredEntrance(index = 1, key = "profile-identity")
+                onEditProfile = onEditProfile,
+                modifier = Modifier.staggeredEntrance(index = 0, key = "profile-identity")
             )
         }
 
@@ -215,48 +229,31 @@ private fun ProfileContent(
             LevelProgressCard(
                 progress = levelProgress,
                 glassState = glassState,
-                modifier = Modifier.staggeredEntrance(index = 2, key = "profile-level")
+                modifier = Modifier
+                    .padding(top = Dimens.Space1)
+                    .staggeredEntrance(index = 1, key = "profile-level")
             )
         }
 
         item(key = "profile-stats") {
-            Row(
+            ProfileStatsRow(
+                totalWorkouts = totalWorkouts,
+                streak = streak,
+                badges = badgeCount,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .staggeredEntrance(index = 3, key = "profile-stats"),
-                horizontalArrangement = Arrangement.spacedBy(Dimens.Space1 + 4.dp)
-            ) {
-                ProfileStatCard(
-                    value = badgeCount,
-                    label = "BADGES",
-                    glassState = glassState,
-                    onClick = onOpenAchievements,
-                    modifier = Modifier.weight(1f)
-                )
-                ProfileStatCard(
-                    value = totalWorkouts,
-                    label = "WORKOUTS",
-                    glassState = glassState,
-                    modifier = Modifier.weight(1f)
-                )
-                ProfileStatCard(
-                    value = streak,
-                    label = "STREAK",
-                    glassState = glassState,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+                    .padding(vertical = Dimens.Space1)
+                    .staggeredEntrance(index = 2, key = "profile-stats")
+            )
         }
 
-        items(menuItems, key = { "menu-${it.title}" }) { entry ->
-            val index = menuItems.indexOf(entry)
-            ProfileMenuRow(
-                title = entry.title,
-                icon = entry.icon,
-                glassState = glassState,
-                onClick = entry.onClick,
-                modifier = Modifier.staggeredEntrance(index = 4 + index, key = "profile-menu-${entry.title}")
-            )
+        menuGroups.forEachIndexed { groupIndex, group ->
+            item(key = "profile-group-${group.label}") {
+                ProfileMenuGroup(
+                    group = group,
+                    glassState = glassState,
+                    modifier = Modifier.staggeredEntrance(index = 3 + groupIndex, key = "profile-group-${group.label}")
+                )
+            }
         }
 
         item(key = "profile-signout") {
@@ -264,7 +261,7 @@ private fun ProfileContent(
                 onClick = { showSignOutConfirm = true },
                 modifier = Modifier
                     .padding(top = Dimens.Space1)
-                    .staggeredEntrance(index = 8, key = "profile-signout")
+                    .staggeredEntrance(index = 3 + menuGroups.size, key = "profile-signout")
             )
         }
     }
@@ -276,14 +273,14 @@ private fun ProfileContent(
             shape = ApexShapes.large,
             title = {
                 Text(
-                    text = "Sign Out?",
+                    text = "Sign out?",
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             },
             text = {
                 Text(
-                    text = "You'll need to sign back in to see your data.",
+                    text = "Your data stays saved. You'll just need to sign back in to see it.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.apex.mutedText
                 )
@@ -294,7 +291,7 @@ private fun ProfileContent(
                     modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)
                 ) {
                     Text(
-                        text = "Sign Out",
+                        text = "Sign out",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.apex.errorText
                     )
@@ -318,93 +315,96 @@ private fun ProfileContent(
 
 // ---- Identity ----
 
+// Who you are, sitting on the background: avatar, name, email and a quiet details line
 @Composable
-private fun IdentityCard(
+private fun IdentityHeader(
     displayName: String,
     initials: String,
     email: String,
     memberSince: String,
     fitnessLevel: String,
-    glassState: com.example.apexfitness.ui.theme.GlassState,
+    onEditProfile: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .glassPanel(glassState, shape = CardShape)
-            .padding(Dimens.Space3),
-        horizontalAlignment = Alignment.CenterHorizontally
+    val details = buildList {
+        if (fitnessLevel.isNotBlank()) add(fitnessLevel.replaceFirstChar { it.uppercase() })
+        add("Member since $memberSince")
+    }.joinToString("  ·  ")
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(80.dp)
+                .size(72.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
+                .background(MaterialTheme.colorScheme.surface)
+                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             if (initials.isBlank()) {
                 Icon(
                     imageVector = Icons.Outlined.Person,
-                    contentDescription = "Profile",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(32.dp)
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(30.dp)
                 )
             } else {
                 Text(
                     text = initials,
-                    style = ApexText.NumeralSmall,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    style = ApexText.NumeralSmall.copy(fontSize = 28.sp, lineHeight = 30.sp),
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(Dimens.Space2))
-
-        Text(
-            text = displayName,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        if (email.isNotBlank()) {
+        Spacer(modifier = Modifier.width(Dimens.Space2))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = email,
-                style = MaterialTheme.typography.bodyMedium,
+                text = displayName,
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (email.isNotBlank()) {
+                Text(
+                    text = email,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.apex.mutedText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = details,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.apex.mutedText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Spacer(modifier = Modifier.height(Dimens.Space1))
-        Text(
-            text = "MEMBER SINCE ${memberSince.uppercase()}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.apex.mutedText
-        )
-
-        if (fitnessLevel.isNotBlank()) {
-            Box(
-                modifier = Modifier
-                    .padding(top = Dimens.Space2)
-                    .clip(PillShape)
-                    .background(MaterialTheme.apex.accentSoft)
-                    .border(Dimens.Hairline, MaterialTheme.apex.accent.copy(alpha = 0.45f), PillShape)
-            ) {
-                Text(
-                    text = fitnessLevel.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.apex.accentText,
-                    modifier = Modifier.padding(horizontal = Dimens.Space2, vertical = Dimens.Space1)
-                )
-            }
+        Box(
+            modifier = Modifier
+                .size(Dimens.MinTouchTarget)
+                .apexClickable(onClick = onEditProfile)
+                .clip(CircleShape)
+                .border(Dimens.Hairline, MaterialTheme.apex.hairline, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Edit,
+                contentDescription = "Edit profile",
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
 
 // ---- Level ----
 
+// Level is the one accent moment on Profile: big level number, title, and the XP bar
 @Composable
 private fun LevelProgressCard(
     progress: GamificationCalculations.LevelProgress,
@@ -415,125 +415,141 @@ private fun LevelProgressCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .glassPanel(glassState, shape = CardShape)
+            .glassPanel(glassState, shape = RoundedCornerShape(24.dp))
             .padding(Dimens.Space3)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Dimens.Space2)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(Dimens.MinTouchTarget)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.apex.accentSoft),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.MilitaryTech,
-                        contentDescription = null,
-                        tint = MaterialTheme.apex.accentText,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Column {
-                    Text(
-                        text = "Level ${progress.level}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = GamificationCalculations.levelTitle(progress.level).uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.apex.mutedText,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+        Text(
+            text = GamificationCalculations.levelTitle(progress.level).uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.apex.accentText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                text = "$animatedXp / ${progress.xpForNextLevel} XP",
+                text = "Level ",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(
+                text = "${progress.level}",
+                style = ApexText.HeroNumeral.copy(fontSize = 56.sp, lineHeight = 58.sp),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${groupThousands(animatedXp)} / ${groupThousands(progress.xpForNextLevel)} XP",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.apex.mutedText,
-                maxLines = 1
+                maxLines = 1,
+                modifier = Modifier.padding(bottom = 10.dp)
             )
         }
-        Spacer(modifier = Modifier.height(Dimens.Space2))
+        Spacer(modifier = Modifier.height(Dimens.Space1))
         ApexProgressBar(progress = progress.progressFraction, height = 6.dp)
     }
 }
 
 // ---- Stats and menu ----
 
+// Lifetime numbers on the background with thin dividers. They are information, not buttons.
 @Composable
-private fun ProfileStatCard(
-    value: Int,
-    label: String,
-    glassState: com.example.apexfitness.ui.theme.GlassState,
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null
+private fun ProfileStatsRow(
+    totalWorkouts: Int,
+    streak: Int,
+    badges: Int,
+    modifier: Modifier = Modifier
 ) {
-    val animated by rememberCountUpInt(value)
-    Column(
-        modifier = modifier
-            .then(if (onClick != null) Modifier.apexClickable(onClick = onClick) else Modifier)
-            .glassPanel(glassState, shape = CardShape)
-            .heightIn(min = Dimens.MinTouchTarget)
-            .padding(vertical = Dimens.Space2, horizontal = Dimens.Space1),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "$animated",
-            style = ApexText.NumeralSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.apex.mutedText,
-            maxLines = 1
-        )
+    val shownWorkouts by rememberCountUpInt(totalWorkouts)
+    val shownStreak by rememberCountUpInt(streak)
+    val shownBadges by rememberCountUpInt(badges)
+    val valueStyle = ApexText.Numeral.copy(fontSize = 36.sp, lineHeight = 40.sp)
+    val valueColor = MaterialTheme.colorScheme.onBackground
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        MetricBlock(value = groupThousands(shownWorkouts), label = "WORKOUTS", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = valueColor)
+        StatDivider()
+        MetricBlock(value = "$shownStreak", label = "DAY STREAK", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = valueColor)
+        StatDivider()
+        MetricBlock(value = "$shownBadges", label = "BADGES", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = valueColor)
     }
 }
 
 @Composable
-private fun ProfileMenuRow(
-    title: String,
-    icon: ImageVector,
+private fun StatDivider() {
+    Box(
+        modifier = Modifier
+            .width(Dimens.Hairline)
+            .height(36.dp)
+            .background(MaterialTheme.apex.hairline)
+    )
+}
+
+@Composable
+private fun ProfileMenuGroup(
+    group: MenuGroup,
     glassState: com.example.apexfitness.ui.theme.GlassState,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = group.label.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.apex.mutedText,
+            modifier = Modifier.padding(start = 4.dp, bottom = Dimens.Space1)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .glassPanel(glassState, shape = CardShape)
+        ) {
+            group.entries.forEachIndexed { index, entry ->
+                if (index > 0) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 56.dp)
+                            .fillMaxWidth()
+                            .height(Dimens.Hairline)
+                            .background(MaterialTheme.apex.hairline)
+                    )
+                }
+                ProfileMenuRow(entry = entry)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileMenuRow(entry: MenuEntry) {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .apexClickable(onClick = onClick)
-            .glassPanel(glassState, shape = CardShape)
-            .heightIn(min = 64.dp)
-            .padding(horizontal = Dimens.Space2 + 4.dp),
+            .apexClickable(pressedScale = 0.99f, onClick = entry.onClick)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = Dimens.Space2),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = icon,
+            imageVector = entry.icon,
             contentDescription = null,
-            tint = MaterialTheme.apex.accentText,
+            tint = MaterialTheme.apex.mutedText,
             modifier = Modifier.size(22.dp)
         )
         Spacer(modifier = Modifier.width(Dimens.Space2))
         Text(
-            text = title,
+            text = entry.title,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f)
         )
+        if (entry.detail != null) {
+            Text(
+                text = entry.detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.apex.mutedText
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+        }
         Icon(
             imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
             contentDescription = null,
@@ -542,7 +558,7 @@ private fun ProfileMenuRow(
     }
 }
 
-// Sign out button, outlined so it is not too loud
+// Sign out: quiet text in the error colour, it does not need to shout
 @Composable
 private fun SignOutButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val errorColor = MaterialTheme.apex.errorText
@@ -552,7 +568,7 @@ private fun SignOutButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .apexClickable(onClick = onClick)
             .heightIn(min = 52.dp)
             .clip(PillShape)
-            .border(Dimens.Hairline, errorColor.copy(alpha = 0.6f), PillShape),
+            .border(Dimens.Hairline, MaterialTheme.apex.hairline, PillShape),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -564,44 +580,46 @@ private fun SignOutButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.width(Dimens.Space1))
         Text(
-            text = "Sign Out",
+            text = "Sign out",
             style = MaterialTheme.typography.labelLarge,
             color = errorColor
         )
     }
 }
 
+private fun groupThousands(value: Int): String = "%,d".format(value)
+
 // ---- Loading skeleton ----
 
 @Composable
 private fun ProfileSkeleton(topContentPadding: Dp, bottomContentPadding: Dp) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = Dimens.ScreenEdge,
-            end = Dimens.ScreenEdge,
-            top = Dimens.Space3 + topContentPadding,
-            bottom = Dimens.Space2 + bottomContentPadding
-        ),
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(
+                start = Dimens.ScreenEdge,
+                end = Dimens.ScreenEdge,
+                top = Dimens.Space2 + topContentPadding,
+                bottom = bottomContentPadding
+            ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2)
     ) {
-        item { SkeletonBlock(modifier = Modifier.width(140.dp).height(32.dp)) }
-        item {
-            SkeletonBlock(modifier = Modifier.fillMaxWidth().height(232.dp), shape = CardShape)
-        }
-        item {
-            SkeletonBlock(modifier = Modifier.fillMaxWidth().height(112.dp), shape = CardShape)
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space2)) {
-                repeat(3) {
-                    SkeletonBlock(modifier = Modifier.weight(1f).height(80.dp), shape = CardShape)
-                }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SkeletonCircle(size = 72.dp)
+            Spacer(modifier = Modifier.width(Dimens.Space2))
+            Column {
+                SkeletonBlock(modifier = Modifier.width(160.dp).height(24.dp))
+                Spacer(modifier = Modifier.height(Dimens.Space1))
+                SkeletonBlock(modifier = Modifier.width(120.dp).height(12.dp))
             }
         }
-        items(4) {
-            SkeletonBlock(modifier = Modifier.fillMaxWidth().height(64.dp), shape = CardShape)
+        Spacer(modifier = Modifier.height(4.dp))
+        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(128.dp), shape = RoundedCornerShape(24.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space3)) {
+            repeat(3) { SkeletonBlock(modifier = Modifier.weight(1f).height(52.dp)) }
         }
+        SkeletonBlock(modifier = Modifier.width(80.dp).height(12.dp))
+        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(224.dp), shape = CardShape)
     }
 }
 
