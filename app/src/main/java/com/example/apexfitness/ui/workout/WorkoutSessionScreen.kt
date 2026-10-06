@@ -153,6 +153,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     var favoriteExerciseNames by remember { mutableStateOf<Set<String>>(emptySet()) }
     var swapTargetIndex by remember { mutableStateOf<Int?>(null) }
     var showAddExercise by remember { mutableStateOf(false) }
+    var showExactAlarmPrompt by remember { mutableStateOf(false) }
     var startTimeMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     // Another workout that was never finished, waiting for the user to resume or discard it
     var unfinishedWorkout by remember { mutableStateOf<ActiveWorkout?>(null) }
@@ -415,6 +416,14 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
         restEndMillis = System.currentTimeMillis() + seconds * 1000L
         isRestPaused = false
         runRestTicker()
+        // The first rest is the moment the alarm matters, so ask here, once
+        if (previewRoutine == null &&
+            !WorkoutSessionNotifier.canRingOnTime(context) &&
+            !OnboardingPreferences.hasAskedExactAlarm(context)
+        ) {
+            OnboardingPreferences.setAskedExactAlarm(context)
+            showExactAlarmPrompt = true
+        }
     }
 
     fun pauseResumeRestTimer() {
@@ -608,6 +617,16 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
             )
         }
 
+        if (showExactAlarmPrompt) {
+            ExactAlarmDialog(
+                onAllow = {
+                    showExactAlarmPrompt = false
+                    WorkoutSessionNotifier.openExactAlarmSettings(context)
+                },
+                onDismiss = { showExactAlarmPrompt = false }
+            )
+        }
+
         unfinishedWorkout?.let { other ->
             UnfinishedWorkoutDialog(
                 workout = other,
@@ -622,6 +641,48 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                 }
             )
         }
+    }
+}
+
+// Asks once for "Alarms & reminders", so the rest ping is on time with the screen off (Android 12+)
+@Composable
+private fun ExactAlarmDialog(onAllow: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = ApexShapes.large,
+        title = {
+            Text(
+                text = "Ping when rest is over?",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Text(
+                text = "With the screen off, Android can ping you up to a minute late. Turn on Alarms & reminders for ApexFitness and it rings right on time.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.apex.mutedText
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onAllow, modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)) {
+                Text(text = "Turn on", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.apex.accentText)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)) {
+                Text(text = "Not now", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    )
+}
+
+@Preview(showBackground = true, name = "Exact alarm prompt")
+@Composable
+private fun ExactAlarmDialogPreview() {
+    ApexFitnessTheme(darkTheme = false) {
+        ExactAlarmDialog(onAllow = {}, onDismiss = {})
     }
 }
 

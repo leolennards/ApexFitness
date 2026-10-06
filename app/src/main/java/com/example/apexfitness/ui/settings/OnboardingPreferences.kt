@@ -8,6 +8,7 @@ object OnboardingPreferences {
     private const val PREFS_NAME = "apex_onboarding_prefs"
     private const val KEY_SEEN_WORKOUT_GLOSSARY = "seen_workout_glossary"
     private const val KEY_ASKED_WORKOUT_NOTIFICATIONS = "asked_workout_notifications"
+    private const val KEY_ASKED_EXACT_ALARM = "asked_exact_alarm"
 
     fun hasSeenWorkoutGlossary(context: Context): Boolean =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -29,6 +30,18 @@ object OnboardingPreferences {
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_ASKED_WORKOUT_NOTIFICATIONS, true)
+            .apply()
+    }
+
+    // Same for the "Alarms & reminders" permission, asked the first time a rest timer starts
+    fun hasAskedExactAlarm(context: Context): Boolean =
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_ASKED_EXACT_ALARM, false)
+
+    fun setAskedExactAlarm(context: Context) {
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_ASKED_EXACT_ALARM, true)
             .apply()
     }
 }

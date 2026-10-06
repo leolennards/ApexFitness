@@ -108,6 +108,26 @@ object WorkoutSessionNotifier {
         NotificationManagerCompat.from(context).cancel(REST_DONE_NOTIFICATION_ID)
     }
 
+    // False on Android 12+ when "Alarms & reminders" is off (the default on Android 14+),
+    // which means the rest alarm can arrive late
+    fun canRingOnTime(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return alarmManager.canScheduleExactAlarms()
+    }
+
+    // Opens the system page where the user can turn "Alarms & reminders" on for this app
+    fun openExactAlarmSettings(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        runCatching {
+            context.startActivity(
+                Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                    .setData(android.net.Uri.parse("package:${context.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+    }
+
     private fun restAlarmIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
         context,
         REST_ALARM_REQUEST_CODE,
