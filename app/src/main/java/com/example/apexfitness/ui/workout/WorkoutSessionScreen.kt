@@ -1,4 +1,4 @@
-package com.example.apexfitness.ui.Workout
+package com.example.apexfitness.ui.workout
 
 import com.example.apexfitness.ui.settings.UnitPreferences
 import com.example.apexfitness.ui.settings.OnboardingPreferences
@@ -97,6 +97,16 @@ import kotlinx.coroutines.flow.first
 import com.example.apexfitness.data.ExerciseHistory
 import com.example.apexfitness.data.ExerciseInfo
 import kotlinx.coroutines.isActive
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.apexfitness.ui.notifications.WorkoutSessionNotifier
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import com.example.apexfitness.ui.theme.*
@@ -132,11 +142,17 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     var restTotalSeconds by remember { mutableStateOf(0) }
     var isRestPaused by remember { mutableStateOf(false) }
     var restTimerJob by remember { mutableStateOf<Job?>(null) }
+    // Rest is worked out from the clock, not by counting down, so it stays right after the app was in the background
+    var restEndMillis by remember { mutableStateOf(0L) }
     var restPromptSeconds by remember { mutableStateOf<Int?>(null) }
     var showGlossary by remember { mutableStateOf(!OnboardingPreferences.hasSeenWorkoutGlossary(context)) }
     var favoriteExerciseNames by remember { mutableStateOf<Set<String>>(emptySet()) }
     var swapTargetIndex by remember { mutableStateOf<Int?>(null) }
-    val startTimeMillis = remember { System.currentTimeMillis() }
+    var startTimeMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    // Another workout that was never finished, waiting for the user to resume or discard it
+    var unfinishedWorkout by remember { mutableStateOf<ActiveWorkout?>(null) }
+    // Set once the workout is finished or discarded, so it is not saved again on the way out
+    var isLeaving by remember { mutableStateOf(false) }
     // What the user did last time and their best, by exercise name (lowercase)
     var history by remember { mutableStateOf<Map<String, ExerciseHistory>>(emptyMap()) }
 
@@ -144,12 +160,57 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
 
     val glassState = rememberGlassState()
     val haptics = rememberHaptics()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Updates the seconds left from the end time a few times a second, and beeps when it reaches zero
+    fun runRestTicker() {
+        restTimerJob?.cancel()
+        restTimerJob = coroutineScope.launch {
+            while (isActive) {
+                val left = (((restEndMillis - System.currentTimeMillis()) + 999) / 1000).toInt().coerceAtLeast(0)
+                restSecondsLeft = left
+                if (left <= 0) break
+                delay(250)
+            }
+            if (restEndMillis > 0L) {
+                restEndMillis = 0L
+                restTotalSeconds = 0
+                // In the background the alarm notification does this job instead
+                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    triggerRestCompleteFeedback(haptics)
+                }
+            }
+        }
+    }
 
     LaunchedEffect(routineId, uid) {
-        val loaded = previewRoutine ?: if (uid != null) FirestoreRepository.getRoutine(uid, routineId) else null
-        run {
+        val saved = if (previewRoutine == null) ActiveWorkoutStore.active.value else null
+        val loaded = previewRoutine ?: if (uid != null) runCatching { FirestoreRepository.getRoutine(uid, routineId) }.getOrNull() else null
+        sessionExercises.clear()
+        if (saved != null && saved.routineId == routineId) {
+            // Pick up where the user left off. If the routine was deleted meanwhile, the saved copy still lets them finish.
+            routine = loaded ?: Routine(id = saved.routineId, name = saved.routineName)
+            startTimeMillis = saved.startTimeMillis
+            saved.exercises.forEach { savedExercise ->
+                val sets = mutableStateListOf<SetEntry>()
+                savedExercise.sets.forEach { set ->
+                    sets.add(SetEntry(reps = set.reps, weight = set.weight).also { it.completed = set.completed })
+                }
+                sessionExercises.add(ExerciseSession(savedExercise.exercise, sets))
+            }
+            val now = System.currentTimeMillis()
+            if (saved.restPausedSecondsLeft > 0) {
+                restTotalSeconds = saved.restTotalSeconds
+                restSecondsLeft = saved.restPausedSecondsLeft
+                isRestPaused = true
+            } else if (saved.restEndMillis > now) {
+                restTotalSeconds = saved.restTotalSeconds
+                restEndMillis = saved.restEndMillis
+                restSecondsLeft = (((saved.restEndMillis - now) + 999) / 1000).toInt()
+                runRestTicker()
+            }
+        } else {
             routine = loaded
-            sessionExercises.clear()
             loaded?.exercises?.sortedBy { it.order }?.forEach { ex ->
                 val sets = mutableStateListOf<SetEntry>()
                 val prefillReps = ex.reps.takeIf { it.all { c -> c.isDigit() } } ?: ""
@@ -158,8 +219,77 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                 }
                 sessionExercises.add(ExerciseSession(ex, sets))
             }
+            // Don't silently throw away a different workout that already has sets logged
+            if (saved != null && saved.doneSets > 0) unfinishedWorkout = saved
         }
         isLoading = false
+    }
+
+    // Save the workout on the device after every change, and keep the notification up to date
+    LaunchedEffect(Unit) {
+        if (previewRoutine != null) return@LaunchedEffect
+        snapshotFlow {
+            val current = routine
+            if (isLoading || current == null || unfinishedWorkout != null || isSaving || isLeaving) null
+            else ActiveWorkout(
+                routineId = current.id,
+                routineName = current.name,
+                startTimeMillis = startTimeMillis,
+                exercises = sessionExercises.map { session ->
+                    SavedExercise(session.exercise, session.sets.map { SavedSet(it.reps, it.weight, it.completed) })
+                },
+                restEndMillis = if (restSecondsLeft > 0 && !isRestPaused) restEndMillis else 0L,
+                restTotalSeconds = restTotalSeconds,
+                restPausedSecondsLeft = if (isRestPaused) restSecondsLeft else 0
+            )
+        }.collect { workout ->
+            if (workout != null) {
+                ActiveWorkoutStore.save(context, workout)
+                WorkoutSessionNotifier.showOngoing(context, workout)
+            }
+        }
+    }
+
+    // Ask for notification permission the first time a workout starts (Android 13+), for the rest timer
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) ActiveWorkoutStore.active.value?.let { WorkoutSessionNotifier.showOngoing(context, it) }
+    }
+    LaunchedEffect(Unit) {
+        if (previewRoutine != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@LaunchedEffect
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (!granted && !OnboardingPreferences.hasAskedWorkoutNotifications(context)) {
+            OnboardingPreferences.setAskedWorkoutNotifications(context)
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // In the background the in-app beep can't be heard, so an alarm pings when the rest ends instead
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    if (restSecondsLeft > 0 && !isRestPaused && previewRoutine == null) {
+                        WorkoutSessionNotifier.scheduleRestAlarm(context, restEndMillis)
+                    }
+                }
+                Lifecycle.Event.ON_START -> {
+                    WorkoutSessionNotifier.cancelRestAlarm(context)
+                    WorkoutSessionNotifier.cancelRestDone(context)
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Leaving without finishing throws the workout away
+    fun discardWorkout() {
+        isLeaving = true
+        restTimerJob?.cancel()
+        ActiveWorkoutStore.clear(context)
+        WorkoutSessionNotifier.cancelAll(context)
+        navController.popBackStack()
     }
 
     LaunchedEffect(uid) {
@@ -216,23 +346,20 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
         if (seconds <= 0) return
         restTotalSeconds = seconds
         restSecondsLeft = seconds
+        restEndMillis = System.currentTimeMillis() + seconds * 1000L
         isRestPaused = false
-        restTimerJob = coroutineScope.launch {
-            while (isActive && restSecondsLeft > 0) {
-                delay(1000)
-                if (!isRestPaused && restSecondsLeft > 0) {
-                    restSecondsLeft -= 1
-                }
-            }
-            if (restSecondsLeft <= 0) {
-                triggerRestCompleteFeedback(haptics)
-            }
-        }
+        runRestTicker()
     }
 
     fun pauseResumeRestTimer() {
-        if (restTimerJob != null && restSecondsLeft > 0) {
-            isRestPaused = !isRestPaused
+        if (restSecondsLeft <= 0) return
+        if (isRestPaused) {
+            restEndMillis = System.currentTimeMillis() + restSecondsLeft * 1000L
+            isRestPaused = false
+            runRestTicker()
+        } else {
+            isRestPaused = true
+            restTimerJob?.cancel()
         }
     }
 
@@ -241,16 +368,18 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
         restTimerJob = null
         restSecondsLeft = 0
         restTotalSeconds = 0
+        restEndMillis = 0L
         isRestPaused = false
     }
 
     fun adjustRestTimer(deltaSeconds: Int) {
-        if (restSecondsLeft <= 0 && restTimerJob == null) return
+        if (restSecondsLeft <= 0) return
         val next = (restSecondsLeft + deltaSeconds).coerceAtLeast(0)
         if (next <= 0) {
             skipRestTimer()
         } else {
             restSecondsLeft = next
+            if (!isRestPaused) restEndMillis = System.currentTimeMillis() + next * 1000L
             if (next > restTotalSeconds) restTotalSeconds = next
         }
     }
@@ -310,13 +439,19 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                     exercises = results
                 )
             }
-            isSaving = false
             if (WorkoutSummaryHolder.current != null) {
+                // Saved to Firestore, so the copy on the device is no longer needed
+                isLeaving = true
+                restTimerJob?.cancel()
+                ActiveWorkoutStore.clear(context)
+                WorkoutSessionNotifier.cancelAll(context)
                 // Replace the session with the summary so Back goes to the home screen
                 navController.navigate("workoutSummary") {
                     popUpTo("workoutSession/{routineId}") { inclusive = true }
                 }
             } else {
+                // Saving failed. The workout stays saved on the device, so Home offers to resume it.
+                isSaving = false
                 navController.popBackStack()
             }
         }
@@ -356,7 +491,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                             isSaving = isSaving,
                             glassState = glassState,
                             history = history,
-                            onClose = { navController.popBackStack() },
+                            onClose = { discardWorkout() },
                             onFinish = { finishWorkout() },
                             onSetCompleted = { session -> restPromptSeconds = session.exercise.restSeconds },
                             onSwapRequested = { index -> swapTargetIndex = index },
@@ -392,7 +527,70 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                 }
             )
         }
+
+        unfinishedWorkout?.let { other ->
+            UnfinishedWorkoutDialog(
+                workout = other,
+                onResume = {
+                    navController.navigate("workoutSession/${other.routineId}") {
+                        popUpTo("workoutSession/{routineId}") { inclusive = true }
+                    }
+                },
+                onDiscard = {
+                    ActiveWorkoutStore.clear(context)
+                    unfinishedWorkout = null
+                }
+            )
+        }
     }
+}
+
+// Shown when a new workout starts while another one was never finished
+@Composable
+private fun UnfinishedWorkoutDialog(
+    workout: ActiveWorkout,
+    onResume: () -> Unit,
+    onDiscard: () -> Unit
+) {
+    val name = workout.routineName.ifBlank { "Your last workout" }
+    AlertDialog(
+        // No tap-outside dismiss, the user has to pick one so nothing is lost by accident
+        onDismissRequest = {},
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = ApexShapes.large,
+        title = {
+            Text(
+                text = "Unfinished workout",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Text(
+                text = "$name is still in progress with ${workout.doneSets} of ${workout.totalSets} sets done. Resume it, or discard it and start this one?",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.apex.mutedText
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onResume, modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)) {
+                Text(
+                    text = "Resume",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.apex.accentText
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDiscard, modifier = Modifier.heightIn(min = Dimens.MinTouchTarget)) {
+                Text(
+                    text = "Discard it",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.apex.errorText
+                )
+            }
+        }
+    )
 }
 
 // What sits in the bar at the bottom of the workout

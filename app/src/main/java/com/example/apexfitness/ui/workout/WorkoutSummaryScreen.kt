@@ -1,4 +1,4 @@
-package com.example.apexfitness.ui.Workout
+package com.example.apexfitness.ui.workout
 
 import android.content.Context
 import android.content.Intent

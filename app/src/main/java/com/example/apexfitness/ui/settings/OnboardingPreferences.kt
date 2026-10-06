@@ -7,6 +7,7 @@ import android.content.Context
 object OnboardingPreferences {
     private const val PREFS_NAME = "apex_onboarding_prefs"
     private const val KEY_SEEN_WORKOUT_GLOSSARY = "seen_workout_glossary"
+    private const val KEY_ASKED_WORKOUT_NOTIFICATIONS = "asked_workout_notifications"
 
     fun hasSeenWorkoutGlossary(context: Context): Boolean =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -16,6 +17,18 @@ object OnboardingPreferences {
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_SEEN_WORKOUT_GLOSSARY, true)
+            .apply()
+    }
+
+    // I only ask for notification permission once, the first time a workout starts
+    fun hasAskedWorkoutNotifications(context: Context): Boolean =
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_ASKED_WORKOUT_NOTIFICATIONS, false)
+
+    fun setAskedWorkoutNotifications(context: Context) {
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_ASKED_WORKOUT_NOTIFICATIONS, true)
             .apply()
     }
 }

@@ -70,6 +70,11 @@
             android:name=".ui.notifications.WorkoutReminderReceiver"
             android:exported="false" />
 
+        <!-- Pings when a rest timer ends while the app is in the background -->
+        <receiver
+            android:name=".ui.notifications.RestTimerReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".ui.notifications.BootReceiver"
             android:exported="false">

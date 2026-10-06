@@ -1,4 +1,4 @@
-package com.example.apexfitness.ui.Workout
+package com.example.apexfitness.ui.workout
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background

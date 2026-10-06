@@ -2,6 +2,9 @@
 
 package com.example.apexfitness.ui.home
 
+import com.example.apexfitness.ui.workout.ActiveWorkout
+import com.example.apexfitness.ui.workout.ActiveWorkoutStore
+import com.example.apexfitness.ui.notifications.WorkoutSessionNotifier
 import com.example.apexfitness.ui.settings.UnitPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -100,8 +103,8 @@ import com.example.apexfitness.ui.settings.SettingsScreen
 import com.example.apexfitness.ui.history.ActivityHistoryScreen
 import com.example.apexfitness.ui.health.HealthDataScreen
 import com.example.apexfitness.ui.Stats.StatsPage
-import com.example.apexfitness.ui.Workout.WorkoutTabPage
-import com.example.apexfitness.ui.Workout.WorkoutSessionScreen
+import com.example.apexfitness.ui.workout.WorkoutTabPage
+import com.example.apexfitness.ui.workout.WorkoutSessionScreen
 import com.example.apexfitness.ui.Profile.EditProfileScreen
 import com.example.apexfitness.ui.Profile.ProfilePage
 import com.example.apexfitness.ui.achievements.AchievementsScreen
@@ -113,7 +116,7 @@ import com.example.apexfitness.ui.challenges.ChallengesScreen
 import com.example.apexfitness.ui.water.WaterTrackingScreen
 import com.example.apexfitness.ui.cardio.CardioTrackingScreen
 import com.example.apexfitness.ui.welcome.WelcomeScreen
-import com.example.apexfitness.ui.Workout.WorkoutSummaryScreen
+import com.example.apexfitness.ui.workout.WorkoutSummaryScreen
 import com.example.apexfitness.ui.body.BodyTrackingScreen
 import com.example.apexfitness.ui.body.ProgressPhotosScreen
 import kotlinx.coroutines.launch
@@ -149,6 +152,8 @@ class MainActivity : ComponentActivity() {
         NotificationPreferences.init(applicationContext)
         UnitPreferences.init(applicationContext)
         NotificationScheduler.createChannel(applicationContext)
+        WorkoutSessionNotifier.createChannels(applicationContext)
+        ActiveWorkoutStore.init(applicationContext)
         // Only on a fresh start, so rotating the phone does not open the screen again
         val launchDestination = if (savedInstanceState == null) intent?.getStringExtra(EXTRA_DESTINATION) else null
         setContent {
@@ -385,6 +390,8 @@ fun MainScreen(navController: NavHostController? = null) {
     val personalRecords = mainViewModel.personalRecords
     val todayWaterMl = mainViewModel.todayWaterMl
     val isInitialLoading = mainViewModel.isInitialLoading
+    // A workout that was started but not finished yet (saved on the device)
+    val activeWorkout by ActiveWorkoutStore.active.collectAsState()
 
     // Saved so Back from Settings lands on the tab I left, not Home
     var selectedRoute by rememberSaveable { mutableStateOf(Screen.Home.route) }
@@ -476,6 +483,7 @@ fun MainScreen(navController: NavHostController? = null) {
                         routines = routines,
                         logs = logs,
                         todayWaterMl = todayWaterMl,
+                        activeWorkout = activeWorkout,
                         onStartWorkout = ::startWorkout,
                         onManageRoutines = ::goToRoutines,
                         onSeeAllRoutines = { selectedRoute = Screen.Workout.route },
@@ -639,6 +647,7 @@ fun HomePage(
     routines: List<Routine>,
     logs: List<WorkoutLog>,
     todayWaterMl: Int = 0,
+    activeWorkout: ActiveWorkout? = null,
     onStartWorkout: (String) -> Unit,
     onManageRoutines: () -> Unit,
     onSeeAllRoutines: () -> Unit,
@@ -664,6 +673,7 @@ fun HomePage(
                 routines = routines,
                 logs = logs,
                 todayWaterMl = todayWaterMl,
+                activeWorkout = activeWorkout,
                 onStartWorkout = onStartWorkout,
                 onManageRoutines = onManageRoutines,
                 onSeeAllRoutines = onSeeAllRoutines,
@@ -685,6 +695,7 @@ private fun HomeContent(
     routines: List<Routine>,
     logs: List<WorkoutLog>,
     todayWaterMl: Int,
+    activeWorkout: ActiveWorkout?,
     onStartWorkout: (String) -> Unit,
     onManageRoutines: () -> Unit,
     onSeeAllRoutines: () -> Unit,
@@ -734,6 +745,20 @@ private fun HomeContent(
             )
         }
 
+        // An unfinished workout comes first, so getting back into it is one tap
+        if (activeWorkout != null) {
+            item(key = "resume") {
+                ResumeWorkoutCard(
+                    workout = activeWorkout,
+                    glassState = glassState,
+                    onResume = { onStartWorkout(activeWorkout.routineId) },
+                    modifier = Modifier
+                        .padding(top = Dimens.Space1)
+                        .animateItem()
+                )
+            }
+        }
+
         // Today's workout, or an empty state. If more than one is scheduled, only the first gets the main button.
         if (todaysRoutines.isEmpty()) {
             item(key = "hero-empty") {
@@ -750,7 +775,7 @@ private fun HomeContent(
                 TodaysChallengeCard(
                     routine = routine,
                     lastDoneMillis = lastDoneByRoutine[routine.id],
-                    isPrimary = index == 0,
+                    isPrimary = index == 0 && activeWorkout == null,
                     glassState = glassState,
                     onStart = { onStartWorkout(routine.id) },
                     modifier = Modifier
@@ -1114,6 +1139,52 @@ fun WaterWidgetCard(
     }
 }
 
+// A workout that was started but not finished. Takes the hero spot on Home until it is finished or discarded.
+@Composable
+fun ResumeWorkoutCard(
+    workout: ActiveWorkout,
+    glassState: com.example.apexfitness.ui.theme.GlassState,
+    onResume: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val startedAt = remember(workout.startTimeMillis) {
+        java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(workout.startTimeMillis))
+    }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .glassPanel(glassState, shape = RoundedCornerShape(24.dp))
+            .padding(Dimens.Space3)
+    ) {
+        Text(
+            text = "WORKOUT IN PROGRESS",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.apex.accentText
+        )
+        Spacer(modifier = Modifier.height(Dimens.Space1 + 4.dp))
+        Text(
+            text = workout.routineName.ifBlank { "Workout" },
+            style = MaterialTheme.typography.displaySmall.copy(fontSize = 42.sp, lineHeight = 44.sp),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(Dimens.Space1 + 4.dp))
+        Text(
+            text = "${workout.doneSets} of ${workout.totalSets} sets done  ·  started $startedAt",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.apex.mutedText
+        )
+        Spacer(modifier = Modifier.height(Dimens.Space3))
+        ApexPrimaryButton(
+            text = "Resume workout",
+            onClick = onResume,
+            modifier = Modifier.fillMaxWidth(),
+            icon = Icons.Outlined.PlayArrow
+        )
+    }
+}
+
 // Today's workout: the hero of Home. The routine name is big, the details are one quiet line.
 @Composable
 fun TodaysChallengeCard(
@@ -1364,6 +1435,18 @@ private fun HomeContentDarkPreview() {
                 routines = sample,
                 logs = emptyList(),
                 todayWaterMl = 600,
+                // Shows the resume card on top
+                activeWorkout = com.example.apexfitness.ui.workout.ActiveWorkout(
+                    routineId = "a",
+                    routineName = "Upper Body Strength",
+                    startTimeMillis = System.currentTimeMillis() - 20 * 60_000L,
+                    exercises = listOf(
+                        com.example.apexfitness.ui.workout.SavedExercise(
+                            com.example.apexfitness.data.RoutineExercise(name = "Bench Press"),
+                            List(4) { com.example.apexfitness.ui.workout.SavedSet("8", "60", it < 2) }
+                        )
+                    )
+                ),
                 onStartWorkout = {},
                 onManageRoutines = {},
                 onSeeAllRoutines = {},
