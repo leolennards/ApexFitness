@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.Icon
@@ -127,6 +128,17 @@ private fun WorkoutTabContent(
             )
         }
 
+        item(key = "quick-workout") {
+            QuickWorkoutRow(
+                glassState = glassState,
+                onStart = {
+                    SharedKeys.lastRoutine = "tab-quick"
+                    onStart(QUICK_WORKOUT_ID)
+                },
+                modifier = Modifier.staggeredEntrance(index = 1, key = "quick-workout")
+            )
+        }
+
         items(DAYS_OF_WEEK, key = { "week-day-$it" }) { day ->
             val dayRoutines = routines.filter { it.days.contains(day) }
             WeekDayRow(
@@ -136,7 +148,7 @@ private fun WorkoutTabContent(
                 glassState = glassState,
                 onStart = onStart,
                 modifier = Modifier.staggeredEntrance(
-                    index = 1 + DAYS_OF_WEEK.indexOf(day),
+                    index = 2 + DAYS_OF_WEEK.indexOf(day),
                     key = "week-day-$day"
                 )
             )
@@ -353,6 +365,58 @@ private fun WeekDayRow(
                 }
             }
         }
+    }
+}
+
+// Start an empty workout and pick exercises as you go, no routine needed
+@Composable
+private fun QuickWorkoutRow(
+    glassState: com.example.apexfitness.ui.theme.GlassState,
+    onStart: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .sharedCardBounds("tab-quick")
+            .apexClickable(onClick = onStart)
+            .glassPanel(glassState, shape = CardShape)
+            .heightIn(min = 72.dp)
+            .padding(Dimens.Space2),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(Dimens.MinTouchTarget)
+                .clip(CircleShape)
+                .background(MaterialTheme.apex.accentSoft),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Bolt,
+                contentDescription = null,
+                tint = MaterialTheme.apex.accentText,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(Dimens.Space2))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Quick workout",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "PICK EXERCISES AS YOU GO",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.apex.mutedText
+            )
+        }
+        Icon(
+            imageVector = Icons.Outlined.PlayArrow,
+            contentDescription = "Start a quick workout",
+            tint = MaterialTheme.apex.accentText
+        )
     }
 }
 

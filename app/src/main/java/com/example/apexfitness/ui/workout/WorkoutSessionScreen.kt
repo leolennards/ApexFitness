@@ -123,6 +123,9 @@ class ExerciseSession(exercise: RoutineExercise, val sets: SnapshotStateList<Set
     var exercise by mutableStateOf(exercise)
 }
 
+// Route id for a workout started without a routine. Exercises are picked as you go.
+const val QUICK_WORKOUT_ID = "quick"
+
 // Rest times offered in the rest timer, in seconds
 private val RestTimerPresets = listOf(30, 60, 90, 120)
 
@@ -149,6 +152,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     var showGlossary by remember { mutableStateOf(!OnboardingPreferences.hasSeenWorkoutGlossary(context)) }
     var favoriteExerciseNames by remember { mutableStateOf<Set<String>>(emptySet()) }
     var swapTargetIndex by remember { mutableStateOf<Int?>(null) }
+    var showAddExercise by remember { mutableStateOf(false) }
     var startTimeMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     // Another workout that was never finished, waiting for the user to resume or discard it
     var unfinishedWorkout by remember { mutableStateOf<ActiveWorkout?>(null) }
@@ -191,7 +195,9 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
 
     LaunchedEffect(routineId, uid) {
         val saved = if (previewRoutine == null) ActiveWorkoutStore.active.value else null
-        val loaded = previewRoutine ?: if (uid != null) runCatching { FirestoreRepository.getRoutine(uid, routineId) }.getOrNull() else null
+        val loaded = previewRoutine
+            ?: if (routineId == QUICK_WORKOUT_ID) Routine(id = QUICK_WORKOUT_ID, name = "Quick workout")
+            else if (uid != null) runCatching { FirestoreRepository.getRoutine(uid, routineId) }.getOrNull() else null
         sessionExercises.clear()
         if (saved != null && saved.routineId == routineId) {
             // Pick up where the user left off. If the routine was deleted meanwhile, the saved copy still lets them finish.
@@ -379,6 +385,28 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
         }
     }
 
+    // Adds an exercise mid-workout. Starts from last time's sets if there are any, otherwise 3 sets of 10.
+    fun addExercise(name: String) {
+        val previous = lastSessionSets?.get(name.trim().lowercase())
+        val exercise = RoutineExercise(
+            name = name,
+            sets = previous?.size ?: 3,
+            reps = previous?.maxOf { it.reps }?.takeIf { it > 0 }?.toString() ?: "10",
+            order = sessionExercises.size
+        )
+        val sets = mutableStateListOf<SetEntry>()
+        repeat(exercise.sets) { index ->
+            val last = previous?.getOrNull(index)
+            sets.add(
+                SetEntry(
+                    reps = last?.reps?.takeIf { it > 0 }?.toString() ?: exercise.reps,
+                    weight = last?.weight?.takeIf { it > 0 }?.let { UnitPreferences.format(UnitPreferences.fromKg(it, useLbs)) } ?: ""
+                )
+            )
+        }
+        sessionExercises.add(ExerciseSession(exercise, sets))
+    }
+
     fun startRestTimer(seconds: Int) {
         restTimerJob?.cancel()
         if (seconds <= 0) return
@@ -534,6 +562,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                             onFinish = { finishWorkout() },
                             onSetCompleted = { session -> restPromptSeconds = session.exercise.restSeconds },
                             onSwapRequested = { index -> swapTargetIndex = index },
+                            onAddExercise = { showAddExercise = true },
                             onPauseResume = { pauseResumeRestTimer() },
                             onSkip = { skipRestTimer() },
                             onAdjust = { delta -> adjustRestTimer(delta) },
@@ -563,6 +592,18 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                         sessionExercises[idx].exercise = sessionExercises[idx].exercise.copy(name = name)
                     }
                     swapTargetIndex = null
+                }
+            )
+        }
+
+        if (showAddExercise) {
+            ExercisePickerDialog(
+                favoriteExerciseNames = favoriteExerciseNames,
+                onToggleFavorite = ::toggleFavoriteExercise,
+                onDismiss = { showAddExercise = false },
+                onPick = { name ->
+                    addExercise(name)
+                    showAddExercise = false
                 }
             )
         }
@@ -651,6 +692,7 @@ private fun SessionBody(
     onFinish: () -> Unit,
     onSetCompleted: (ExerciseSession) -> Unit,
     onSwapRequested: (Int) -> Unit = {},
+    onAddExercise: () -> Unit = {},
     onPauseResume: () -> Unit,
     onSkip: () -> Unit,
     onAdjust: (Int) -> Unit,
@@ -762,6 +804,25 @@ private fun SessionBody(
                         modifier = Modifier.staggeredEntrance(index)
                     )
                 }
+                // At the end of the list, so adding one never pushes the current exercise around
+                item(key = "add-exercise") {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (totalExercises == 0) {
+                            Text(
+                                text = "Add your first exercise to get going. Sets and reps are filled in from last time.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.apex.mutedText,
+                                modifier = Modifier.padding(bottom = Dimens.Space2)
+                            )
+                        }
+                        ApexSecondaryButton(
+                            text = "Add exercise",
+                            onClick = onAddExercise,
+                            icon = Icons.Outlined.Add,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
         }
 
@@ -813,6 +874,8 @@ private fun SessionBody(
                 SessionBottomMode.Finish -> FinishBar(
                     allDone = allDone,
                     isSaving = isSaving,
+                    // Nothing to save yet in an empty quick workout
+                    canFinish = totalSets > 0,
                     onFinish = { if (totalSets > 0 && doneSets < totalSets) showFinishConfirm = true else onFinish() }
                 )
             }
@@ -1005,7 +1068,8 @@ private fun FinishBar(
     allDone: Boolean,
     isSaving: Boolean,
     onFinish: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    canFinish: Boolean = true
 ) {
     Crossfade(
         targetState = allDone,
@@ -1018,7 +1082,7 @@ private fun FinishBar(
             ApexPrimaryButton(
                 text = text,
                 onClick = onFinish,
-                enabled = !isSaving,
+                enabled = !isSaving && canFinish,
                 icon = Icons.Outlined.Check,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -1026,7 +1090,7 @@ private fun FinishBar(
             ApexSecondaryButton(
                 text = text,
                 onClick = onFinish,
-                enabled = !isSaving,
+                enabled = !isSaving && canFinish,
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -1551,6 +1615,43 @@ private fun SessionExerciseCard(
                 )
             }
         }
+
+        // Add a set (copies the last one) or take away the last set that isn't done yet
+        val removableIndex = session.sets.indexOfLast { !it.completed }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SetEditButton(
+                text = "Add set",
+                icon = Icons.Outlined.Add,
+                onClick = {
+                    val last = session.sets.lastOrNull()
+                    session.sets.add(SetEntry(reps = last?.reps ?: session.exercise.reps, weight = last?.weight ?: ""))
+                }
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            if (session.sets.size > 1 && removableIndex >= 0) {
+                SetEditButton(
+                    text = "Remove set",
+                    icon = Icons.Outlined.Remove,
+                    onClick = { session.sets.removeAt(removableIndex) }
+                )
+            }
+        }
+    }
+}
+
+// Quiet text button under the sets, 48dp tall
+@Composable
+private fun SetEditButton(text: String, icon: ImageVector, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .heightIn(min = Dimens.MinTouchTarget)
+            .apexClickable(onClick = onClick)
+            .padding(end = Dimens.Space1),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.apex.mutedText, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(text = text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.apex.mutedText)
     }
 }
 
