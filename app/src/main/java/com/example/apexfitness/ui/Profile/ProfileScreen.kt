@@ -81,6 +81,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+// Health Data is still a "coming soon" page, so I hide it until Health Connect is in.
+// The screen and its route are kept, flip this to true to show it again.
+private const val SHOW_HEALTH_DATA = false
+
 // Profile tab
 
 @Composable
@@ -186,10 +190,10 @@ private fun ProfileContent(
         ),
         MenuGroup(
             "Body",
-            listOf(
+            listOfNotNull(
                 MenuEntry("Body Progress", Icons.Outlined.MonitorWeight, onOpenBody),
                 MenuEntry("Progress Photos", Icons.Outlined.PhotoCamera, onOpenPhotos),
-                MenuEntry("Health Data", Icons.Outlined.MonitorHeart, onOpenHealthData)
+                if (SHOW_HEALTH_DATA) MenuEntry("Health Data", Icons.Outlined.MonitorHeart, onOpenHealthData) else null
             )
         ),
         MenuGroup(
