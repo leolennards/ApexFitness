@@ -62,6 +62,7 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -155,6 +156,11 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
     var isLeaving by remember { mutableStateOf(false) }
     // What the user did last time and their best, by exercise name (lowercase)
     var history by remember { mutableStateOf<Map<String, ExerciseHistory>>(emptyMap()) }
+    // Every set from the last time each exercise was done (null until loaded), used to fill in the new sets
+    var lastSessionSets by remember { mutableStateOf<Map<String, List<LoggedSet>>?>(null) }
+    // A resumed workout already has the user's numbers, so it is never filled in again
+    var isResumed by remember { mutableStateOf(false) }
+    var hasPrefilled by remember { mutableStateOf(false) }
 
     val sessionExercises = remember { mutableStateListOf<ExerciseSession>() }
 
@@ -191,6 +197,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
             // Pick up where the user left off. If the routine was deleted meanwhile, the saved copy still lets them finish.
             routine = loaded ?: Routine(id = saved.routineId, name = saved.routineName)
             startTimeMillis = saved.startTimeMillis
+            isResumed = true
             saved.exercises.forEach { savedExercise ->
                 val sets = mutableStateListOf<SetEntry>()
                 savedExercise.sets.forEach { set ->
@@ -214,8 +221,10 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
             loaded?.exercises?.sortedBy { it.order }?.forEach { ex ->
                 val sets = mutableStateListOf<SetEntry>()
                 val prefillReps = ex.reps.takeIf { it.all { c -> c.isDigit() } } ?: ""
+                // The target weight is free text like "60 kg", so only keep the number
+                val prefillWeight = leadingNumber(ex.targetWeight)
                 repeat(ex.sets.coerceAtLeast(1)) {
-                    sets.add(SetEntry(reps = prefillReps, weight = ex.targetWeight))
+                    sets.add(SetEntry(reps = prefillReps, weight = prefillWeight))
                 }
                 sessionExercises.add(ExerciseSession(ex, sets))
             }
@@ -299,6 +308,15 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
             // Newest workouts come first, so the first match for an exercise is the latest one
             val logs = FirestoreRepository.observeWorkoutLogs(id, 30).first()
             val map = mutableMapOf<String, ExerciseHistory>()
+            val lastSets = mutableMapOf<String, List<LoggedSet>>()
+            logs.forEach { log ->
+                log.exercises.forEach { exercise ->
+                    val key = exercise.name.trim().lowercase()
+                    val done = exercise.sets.filter { it.completed }
+                    if (key !in lastSets && done.isNotEmpty()) lastSets[key] = done
+                }
+            }
+            lastSessionSets = lastSets
             records.forEach { record ->
                 map[record.exerciseName.trim().lowercase()] = ExerciseHistory(best = record)
             }
@@ -316,6 +334,26 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
             }
             map
         }.onSuccess { history = it }
+    }
+
+    // Once the routine and last time's sets are both loaded, fill each set with what was lifted last time.
+    // Only sets the user has not touched yet are changed.
+    LaunchedEffect(isLoading, lastSessionSets) {
+        val lastSets = lastSessionSets ?: return@LaunchedEffect
+        if (isLoading || isResumed || hasPrefilled) return@LaunchedEffect
+        hasPrefilled = true
+        sessionExercises.forEach { session ->
+            val previous = lastSets[session.exercise.name.trim().lowercase()] ?: return@forEach
+            val templateReps = session.exercise.reps.takeIf { it.all { c -> c.isDigit() } } ?: ""
+            val templateWeight = leadingNumber(session.exercise.targetWeight)
+            session.sets.forEachIndexed { index, set ->
+                if (set.completed || set.reps != templateReps || set.weight != templateWeight) return@forEachIndexed
+                // More sets than last time copy the last one
+                val last = previous.getOrNull(index) ?: previous.last()
+                if (last.reps > 0) set.reps = last.reps.toString()
+                set.weight = if (last.weight > 0) UnitPreferences.format(UnitPreferences.fromKg(last.weight, useLbs)) else ""
+            }
+        }
     }
 
     LaunchedEffect(uid) {
@@ -491,6 +529,7 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                             isSaving = isSaving,
                             glassState = glassState,
                             history = history,
+                            lastSessionSets = lastSessionSets ?: emptyMap(),
                             onClose = { discardWorkout() },
                             onFinish = { finishWorkout() },
                             onSetCompleted = { session -> restPromptSeconds = session.exercise.restSeconds },
@@ -607,6 +646,7 @@ private fun SessionBody(
     isSaving: Boolean,
     glassState: com.example.apexfitness.ui.theme.GlassState,
     history: Map<String, ExerciseHistory> = emptyMap(),
+    lastSessionSets: Map<String, List<LoggedSet>> = emptyMap(),
     onClose: () -> Unit,
     onFinish: () -> Unit,
     onSetCompleted: (ExerciseSession) -> Unit,
@@ -622,6 +662,7 @@ private fun SessionBody(
     onDismissGlossary: () -> Unit = {}
 ) {
     val motionEnabled = LocalMotionEnabled.current
+    val useLbs = UnitPreferences.useLbs.collectAsState().value
     val totalSets = sessionExercises.sumOf { it.sets.size }
     val doneSets = sessionExercises.sumOf { exercise -> exercise.sets.count { it.completed } }
     val sessionProgress = if (totalSets == 0) 0f else doneSets.toFloat() / totalSets.toFloat()
@@ -713,6 +754,7 @@ private fun SessionBody(
                     SessionExerciseCard(
                         session = session,
                         history = history[session.exercise.name.trim().lowercase()],
+                        stepUp = suggestStepUp(session.exercise, lastSessionSets[session.exercise.name.trim().lowercase()], useLbs),
                         onSetCompleted = { onSetCompleted(session) },
                         onSwap = { onSwapRequested(index) },
                         isCurrent = isCurrent,
@@ -1333,6 +1375,7 @@ private fun SessionExerciseCard(
     onSetCompleted: () -> Unit,
     modifier: Modifier = Modifier,
     history: ExerciseHistory? = null,
+    stepUp: Double? = null,
     isCurrent: Boolean = false,
     isDone: Boolean = false,
     onSwap: () -> Unit = {}
@@ -1440,6 +1483,21 @@ private fun SessionExerciseCard(
         if (session.exercise.notes.isNotBlank()) {
             Text(text = session.exercise.notes, style = MaterialTheme.typography.bodySmall, color = mutedColor)
         }
+        // Every rep was hit last time, so offer a small step up. One tap puts it in the sets still to do.
+        if (stepUp != null) {
+            val suggested = UnitPreferences.format(stepUp)
+            val openSets = session.sets.filter { !it.completed }
+            if (openSets.isNotEmpty() && openSets.any { it.weight != suggested }) {
+                Spacer(modifier = Modifier.height(Dimens.Space1))
+                StepUpPill(
+                    text = "All reps hit last time. Try $suggested ${UnitPreferences.label(useLbs)}",
+                    onClick = {
+                        openSets.forEach { it.weight = suggested }
+                        haptics.toggle(true)
+                    }
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(Dimens.Space2))
 
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1494,6 +1552,49 @@ private fun SessionExerciseCard(
             }
         }
     }
+}
+
+// Accent-tinted suggestion under the exercise name. 48dp tall so it is easy to hit.
+@Composable
+private fun StepUpPill(text: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .heightIn(min = Dimens.MinTouchTarget)
+            .apexClickable(onClick = onClick)
+            .clip(PillShape)
+            .background(MaterialTheme.apex.accentSoft)
+            .padding(horizontal = Dimens.Space2),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.TrendingUp,
+            contentDescription = null,
+            tint = MaterialTheme.apex.accentText,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(Dimens.Space1))
+        Text(text = text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.apex.accentText)
+    }
+}
+
+// "60 kg" -> "60", "22.5kg" -> "22.5", "bodyweight" -> ""
+internal fun leadingNumber(text: String): String =
+    Regex("""\d+([.,]\d+)?""").find(text)?.value?.replace(',', '.') ?: ""
+
+// If every set last time was done with all the target reps, suggest the top weight plus one small step
+// (2.5 kg or 5 lb). Returns the weight in the user's unit, or null when there is nothing to suggest.
+internal fun suggestStepUp(exercise: RoutineExercise, lastSets: List<LoggedSet>?, useLbs: Boolean): Double? {
+    if (lastSets.isNullOrEmpty()) return null
+    // "8-12" counts as hitting the top of the range
+    val targetReps = Regex("""\d+""").findAll(exercise.reps).lastOrNull()?.value?.toIntOrNull() ?: return null
+    if (lastSets.size < exercise.sets) return null
+    if (lastSets.any { it.reps < targetReps }) return null
+    val topWeightKg = lastSets.maxOf { it.weight }
+    if (topWeightKg <= 0) return null
+    // Rounded to the step first, so 61.2 kg last time suggests 62.5 and not 63.7
+    val step = if (useLbs) 5.0 else 2.5
+    val top = UnitPreferences.fromKg(topWeightKg, useLbs)
+    return Math.round(top / step) * step + step
 }
 
 // Set done toggle: 48dp tap area around a 34dp circle that fills with the accent when done
