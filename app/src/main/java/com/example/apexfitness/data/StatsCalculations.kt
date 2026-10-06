@@ -30,6 +30,33 @@ object StatsCalculations {
         return streak
     }
 
+    // The Monday that starts the week a time falls in, as a day key
+    private fun weekKey(millis: Long): String {
+        val cal = Calendar.getInstance().apply { timeInMillis = millis }
+        // Monday is 2 and Sunday is 1 in Calendar, so this is how many days back Monday was
+        val daysSinceMonday = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
+        cal.add(Calendar.DAY_OF_YEAR, -daysSinceMonday)
+        return dayKey(cal.timeInMillis)
+    }
+
+    // Weeks in a row with at least one workout. This week only counts once it has a workout,
+    // so the streak doesn't drop to 0 on a Monday before the first session.
+    // Someone who trains 3 times a week keeps it going, unlike the day streak above.
+    fun currentWeekStreak(logs: List<WorkoutLog>): Int {
+        if (logs.isEmpty()) return 0
+        val weeks = logs.map { weekKey(it.dateMillis) }.toSet()
+        val cal = Calendar.getInstance()
+        if (!weeks.contains(weekKey(cal.timeInMillis))) {
+            cal.add(Calendar.WEEK_OF_YEAR, -1)
+        }
+        var streak = 0
+        while (weeks.contains(weekKey(cal.timeInMillis))) {
+            streak++
+            cal.add(Calendar.WEEK_OF_YEAR, -1)
+        }
+        return streak
+    }
+
     fun totalWorkouts(logs: List<WorkoutLog>): Int = logs.size
 
     private fun isWithinLastDays(millis: Long, days: Int): Boolean {

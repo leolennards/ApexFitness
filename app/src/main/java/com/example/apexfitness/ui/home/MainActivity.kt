@@ -524,7 +524,7 @@ fun MainScreen(navController: NavHostController? = null) {
                     is Screen.Profile -> ProfilePage(
                         profile = profile,
                         totalWorkouts = logs.size,
-                        streak = StatsCalculations.currentStreak(logs),
+                        streak = StatsCalculations.currentWeekStreak(logs),
                         levelProgress = levelProgress,
                         onSignOut = {
                             authService.signOut()
@@ -709,7 +709,7 @@ private fun HomeContent(
 ) {
     val today = remember { todayDayCode() }
     val todaysRoutines = remember(routines) { routines.filter { it.days.contains(today) } }
-    val streak = remember(logs) { StatsCalculations.currentStreak(logs) }
+    val streak = remember(logs) { StatsCalculations.currentWeekStreak(logs) }
     val totalWorkouts = logs.size
     val weeklyProgress = remember(logs, profile) {
         StatsCalculations.weeklyCompletionPercent(logs, profile?.scheduleDays?.size ?: 7)
@@ -1053,7 +1053,7 @@ private fun HomeMetricsRow(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MetricBlock(value = "$shownStreak", label = "DAY STREAK", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = MaterialTheme.colorScheme.onBackground)
+        MetricBlock(value = "$shownStreak", label = "WEEK STREAK", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = MaterialTheme.colorScheme.onBackground)
         MetricDivider()
         MetricBlock(value = "$shownWorkouts", label = "WORKOUTS", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = MaterialTheme.colorScheme.onBackground)
         MetricDivider()

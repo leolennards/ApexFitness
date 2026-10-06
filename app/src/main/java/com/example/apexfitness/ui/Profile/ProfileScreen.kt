@@ -469,7 +469,7 @@ private fun ProfileStatsRow(
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         MetricBlock(value = groupThousands(shownWorkouts), label = "WORKOUTS", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = valueColor)
         StatDivider()
-        MetricBlock(value = "$shownStreak", label = "DAY STREAK", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = valueColor)
+        MetricBlock(value = "$shownStreak", label = "WEEK STREAK", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = valueColor)
         StatDivider()
         MetricBlock(value = "$shownBadges", label = "BADGES", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = valueColor)
     }
