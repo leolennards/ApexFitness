@@ -509,7 +509,6 @@ fun WorkoutSessionScreen(navController: NavHostController, routineId: String, pr
                     durationMinutes = durationMinutes,
                     completedSets = completedSets,
                     totalSets = loggedExercises.sumOf { it.sets.size },
-                    volumeKg = loggedExercises.sumOf { ex -> ex.sets.filter { it.completed }.sumOf { it.weight * it.reps } },
                     calories = estimatedCalories,
                     exercises = results
                 )

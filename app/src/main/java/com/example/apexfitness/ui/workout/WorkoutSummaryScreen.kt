@@ -68,7 +68,6 @@ data class WorkoutSummary(
     val durationMinutes: Int,
     val completedSets: Int,
     val totalSets: Int,
-    val volumeKg: Double,
     val calories: Int,
     val exercises: List<ExerciseResult>
 )
@@ -94,7 +93,6 @@ fun WorkoutSummaryScreen(
     }
     if (summary == null) return
 
-    val unit = UnitPreferences.label(useLbs)
     val records = summary.exercises.filter { it.isNewRecord }
     val dateFormat = remember { SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
 
@@ -154,8 +152,8 @@ fun WorkoutSummaryScreen(
                             horizontalAlignment = Alignment.Start
                         )
                         MetricBlock(
-                            value = UnitPreferences.format(UnitPreferences.fromKg(summary.volumeKg, useLbs).let { Math.round(it).toDouble() }),
-                            label = "VOLUME (${unit.uppercase()})",
+                            value = "${summary.exercises.size}",
+                            label = "EXERCISES",
                             valueStyle = ApexText.NumeralSmall,
                             horizontalAlignment = Alignment.Start
                         )
@@ -276,7 +274,7 @@ private fun resultText(result: ExerciseResult, useLbs: Boolean): String =
 // Draws the summary as a picture and opens the share sheet
 private fun shareSummary(context: Context, summary: WorkoutSummary, useLbs: Boolean) {
     try {
-        val file = createShareImage(context, summary, useLbs)
+        val file = createShareImage(context, summary)
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
@@ -291,16 +289,17 @@ private fun shareSummary(context: Context, summary: WorkoutSummary, useLbs: Bool
 }
 
 // A 1080 x 1350 picture in the app's dark colours
-private fun createShareImage(context: Context, summary: WorkoutSummary, useLbs: Boolean): File {
+private fun createShareImage(context: Context, summary: WorkoutSummary): File {
     val width = 1080
     val height = 1350
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
-    val background = 0xFF0E0E11.toInt()
-    val textColor = 0xFFF4F1EA.toInt()
-    val accent = 0xFFD4B27A.toInt()
-    val muted = 0xFF8E8E96.toInt()
+    // Alpenglow dark colours, same as the app in dark mode
+    val background = 0xFF0C0D0F.toInt()
+    val textColor = 0xFFF2F1EE.toInt()
+    val accent = 0xFFF0663F.toInt()
+    val muted = 0xFF8C8E94.toInt()
 
     canvas.drawColor(background)
 
@@ -322,10 +321,8 @@ private fun createShareImage(context: Context, summary: WorkoutSummary, useLbs: 
     canvas.drawText("${summary.durationMinutes}", left, 700f, paint(300f, textColor, bold = true))
     canvas.drawText("MINUTES", left, 770f, paint(38f, muted, spacing = 0.2f))
 
-    val unit = UnitPreferences.label(useLbs).uppercase()
-    val volume = UnitPreferences.fromKg(summary.volumeKg, useLbs).let { Math.round(it) }
     val columns = listOf(
-        "$volume" to "VOLUME ($unit)",
+        "${summary.exercises.size}" to "EXERCISES",
         "${summary.completedSets}" to "SETS",
         "${summary.calories}" to "KCAL"
     )
@@ -355,7 +352,6 @@ private fun previewSummary() = WorkoutSummary(
     durationMinutes = 52,
     completedSets = 11,
     totalSets = 12,
-    volumeKg = 6420.0,
     calories = 310,
     exercises = listOf(
         ExerciseResult("Bench Press", 85.0, 5, true),
