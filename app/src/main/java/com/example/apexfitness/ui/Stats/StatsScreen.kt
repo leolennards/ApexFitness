@@ -26,8 +26,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.TrendingUp
-import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.sp
@@ -153,9 +151,6 @@ private fun StatsContent(
 
         item(key = "stats-hero") {
             StatsHero(
-                volumeThisWeek = UnitPreferences.fromKg(weeklyVolume.lastOrNull() ?: 0.0, useLbs),
-                volumeLastWeek = UnitPreferences.fromKg(weeklyVolume.getOrNull(weeklyVolume.size - 2) ?: 0.0, useLbs),
-                unit = unit,
                 minutes = weeklyMinutes.sum(),
                 workouts = workoutsThisWeek,
                 calories = caloriesThisWeek,
@@ -286,62 +281,29 @@ private fun StatsHeader(onOpenCalendar: () -> Unit, modifier: Modifier = Modifie
     }
 }
 
-// The hero: this week's training volume, how it compares with last week,
-// then minutes, workouts and calories as three smaller numbers.
+// The hero: workouts this week as the big number,
+// then minutes and calories as two smaller numbers.
 @Composable
 private fun StatsHero(
-    volumeThisWeek: Double,
-    volumeLastWeek: Double,
-    unit: String,
     minutes: Int,
     workouts: Int,
     calories: Int,
     modifier: Modifier = Modifier
 ) {
-    val shownVolume by rememberCountUpInt(volumeThisWeek.roundToInt())
     val shownMinutes by rememberCountUpInt(minutes)
     val shownWorkouts by rememberCountUpInt(workouts)
     val shownCalories by rememberCountUpInt(calories)
-    // Change against last week, only when there is a last week to compare with
-    val change = if (volumeLastWeek > 0.0) ((volumeThisWeek - volumeLastWeek) / volumeLastWeek * 100).roundToInt() else null
     val valueColor = MaterialTheme.colorScheme.onBackground
     val muted = MaterialTheme.apex.mutedText
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(text = "VOLUME THIS WEEK", style = MaterialTheme.typography.labelMedium, color = muted)
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(text = groupThousands(shownVolume), style = ApexText.HeroNumeral, color = valueColor, maxLines = 1)
-            Text(
-                text = " $unit",
-                style = MaterialTheme.typography.titleMedium,
-                color = muted,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-        }
-        if (change != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = if (change >= 0) Icons.AutoMirrored.Outlined.TrendingUp else Icons.AutoMirrored.Outlined.TrendingDown,
-                    contentDescription = null,
-                    tint = valueColor,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "${if (change >= 0) "+" else ""}$change% vs last week",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = muted
-                )
-            }
-        } else {
-            Text(text = "Rolling 7 days", style = MaterialTheme.typography.bodyMedium, color = muted)
-        }
+        Text(text = "WORKOUTS THIS WEEK", style = MaterialTheme.typography.labelMedium, color = muted)
+        Text(text = "$shownWorkouts", style = ApexText.HeroNumeral, color = valueColor, maxLines = 1)
+        Text(text = "Rolling 7 days", style = MaterialTheme.typography.bodyMedium, color = muted)
         Spacer(modifier = Modifier.height(Dimens.Space3))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             val small = ApexText.NumeralSmall.copy(fontSize = 30.sp, lineHeight = 34.sp)
             MetricBlock(value = groupThousands(shownMinutes), label = "MINUTES", modifier = Modifier.weight(1f), valueStyle = small, valueColor = valueColor)
-            HeroDivider()
-            MetricBlock(value = "$shownWorkouts", label = "WORKOUTS", modifier = Modifier.weight(1f), valueStyle = small, valueColor = valueColor)
             HeroDivider()
             MetricBlock(value = groupThousands(shownCalories), label = "KCAL (EST.)", modifier = Modifier.weight(1f), valueStyle = small, valueColor = valueColor)
         }
@@ -660,9 +622,9 @@ private fun StatsSkeleton(topContentPadding: Dp, bottomContentPadding: Dp) {
         SkeletonBlock(modifier = Modifier.width(180.dp).height(32.dp))
         Spacer(modifier = Modifier.height(Dimens.Space1))
         SkeletonBlock(modifier = Modifier.width(120.dp).height(12.dp))
-        SkeletonBlock(modifier = Modifier.width(200.dp).height(64.dp))
+        SkeletonBlock(modifier = Modifier.width(72.dp).height(64.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space3)) {
-            repeat(3) { SkeletonBlock(modifier = Modifier.weight(1f).height(48.dp)) }
+            repeat(2) { SkeletonBlock(modifier = Modifier.weight(1f).height(48.dp)) }
         }
         Spacer(modifier = Modifier.height(Dimens.Space1))
         SkeletonBlock(modifier = Modifier.width(150.dp).height(22.dp))
