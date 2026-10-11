@@ -55,6 +55,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.apexfitness.data.LoggedExercise
+import com.example.apexfitness.data.LoggedSet
 import com.example.apexfitness.data.PersonalRecord
 import com.example.apexfitness.data.StatsCalculations
 import com.example.apexfitness.data.UserProfile
@@ -126,10 +128,8 @@ private fun StatsContent(
     val caloriesThisWeek = remember(logs) { StatsCalculations.caloriesThisWeek(logs) }
     val workoutsThisWeek = remember(logs) { StatsCalculations.workoutsThisWeek(logs) }
     val useLbs = UnitPreferences.useLbs.collectAsState().value
-    val weeklyVolume = remember(logs) { StatsCalculations.weeklyVolume(logs) }
-    val volumeWeekLabels = remember { volumeTrendLabels(weeklyVolume.size) }
+    val strengthTrends = remember(logs) { StatsCalculations.strengthProgress(logs) }
     val muscleGroupBreakdown = remember(logs) { StatsCalculations.muscleGroupBreakdown(logs) }
-    val unit = UnitPreferences.label(useLbs)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -180,23 +180,22 @@ private fun StatsContent(
             }
         }
 
-        item(key = "stats-volume") {
+        item(key = "stats-strength") {
             StatsSection(
-                title = "Training volume",
-                subtitle = "Weight × reps on completed sets, per week",
+                title = "Strength progress",
+                subtitle = "Best set, last 4 weeks vs the 4 before",
                 modifier = Modifier
                     .padding(top = Dimens.Space2)
-                    .staggeredEntrance(index = 3, key = "stats-volume")
+                    .staggeredEntrance(index = 3, key = "stats-strength")
             ) {
-                BarChartCard(
-                    values = weeklyVolume.map { UnitPreferences.fromKg(it, useLbs).toFloat() },
-                    labels = volumeWeekLabels,
-                    minScale = 1f,
-                    totalLabel = "${unit.uppercase()} OVER 8 WEEKS",
-                    valueSuffix = unit.uppercase(),
-                    chartName = "Training volume per week",
-                    glassState = glassState
-                )
+                if (strengthTrends.isEmpty()) {
+                    EmptyStatsCard(
+                        text = "Finish a few sets in the last 4 weeks and you'll see how each lift is moving here.",
+                        glassState = glassState
+                    )
+                } else {
+                    StrengthProgressCard(trends = strengthTrends, useLbs = useLbs, glassState = glassState)
+                }
             }
         }
 
@@ -531,6 +530,92 @@ private fun MuscleGroupCard(
     }
 }
 
+// ---- Strength progress ----
+
+// One row per lift: the best set lately, and how far it moved since the 4 weeks before.
+// Up is the accent, flat or down stays quiet so it never feels like a telling-off.
+@Composable
+private fun StrengthProgressCard(
+    trends: List<StatsCalculations.StrengthTrend>,
+    useLbs: Boolean,
+    glassState: com.example.apexfitness.ui.theme.GlassState,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .glassPanel(glassState, shape = CardShape)
+    ) {
+        trends.forEachIndexed { index, trend ->
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = Dimens.Space3)
+                        .fillMaxWidth()
+                        .height(Dimens.Hairline)
+                        .background(MaterialTheme.apex.hairline)
+                )
+            }
+            StrengthProgressRow(trend = trend, useLbs = useLbs)
+        }
+    }
+}
+
+@Composable
+private fun StrengthProgressRow(trend: StatsCalculations.StrengthTrend, useLbs: Boolean) {
+    val unit = UnitPreferences.label(useLbs)
+    fun shown(value: Double): String =
+        if (trend.weighted) formatWeight(UnitPreferences.fromKg(value, useLbs)) else "${value.roundToInt()}"
+    val suffix = if (trend.weighted) " $unit" else " reps"
+    val change = trend.change
+    val changeText = when {
+        change == null -> "New this month"
+        change > 0.0 -> "+${shown(change)}$suffix"
+        change < 0.0 -> "−${shown(-change)}$suffix"
+        else -> "Holding steady"
+    }
+    val changeColor = if (change != null && change > 0.0) MaterialTheme.apex.accentText else MaterialTheme.apex.mutedText
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .padding(horizontal = Dimens.Space3, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = trend.exerciseName,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = changeText,
+                style = MaterialTheme.typography.labelMedium,
+                color = changeColor,
+                maxLines = 1
+            )
+        }
+        Spacer(modifier = Modifier.width(Dimens.Space2))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = shown(trend.current),
+                style = ApexText.NumeralSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+            Text(
+                text = suffix,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.apex.mutedText,
+                modifier = Modifier.padding(bottom = 3.dp)
+            )
+        }
+    }
+}
+
 // ---- Personal records ----
 
 // All records in one grouped card with thin dividers
@@ -649,10 +734,6 @@ private fun last7DayLabels(): List<String> {
     return result
 }
 
-// Labels for the volume chart, oldest first, e.g. "-7w" up to "Now"
-private fun volumeTrendLabels(count: Int): List<String> =
-    (count - 1 downTo 0).map { weeksAgo -> if (weeksAgo == 0) "Now" else "-${weeksAgo}w" }
-
 private fun formatWeight(weight: Double): String = UnitPreferences.format(weight)
 
 // ---- Previews ----
@@ -661,7 +742,17 @@ private fun sampleLogs(): List<WorkoutLog> {
     val now = System.currentTimeMillis()
     val day = 24L * 60 * 60 * 1000
     return listOf(
-        WorkoutLog(routineName = "Chest Day", dateMillis = now, durationMinutes = 42, caloriesBurned = 320),
+        WorkoutLog(
+            routineName = "Chest Day", dateMillis = now, durationMinutes = 42, caloriesBurned = 320,
+            exercises = listOf(
+                LoggedExercise("Bench Press", listOf(LoggedSet(1, 5, 85.0, true))),
+                LoggedExercise("Pull-ups", listOf(LoggedSet(1, 12, 0.0, true)))
+            )
+        ),
+        WorkoutLog(
+            routineName = "Chest Day", dateMillis = now - 35 * day, durationMinutes = 40, caloriesBurned = 300,
+            exercises = listOf(LoggedExercise("Bench Press", listOf(LoggedSet(1, 5, 80.0, true))))
+        ),
         WorkoutLog(routineName = "Leg Day", dateMillis = now - day, durationMinutes = 55, caloriesBurned = 410),
         WorkoutLog(routineName = "Back & Biceps", dateMillis = now - 2 * day, durationMinutes = 38, caloriesBurned = 290),
         WorkoutLog(routineName = "Chest Day", dateMillis = now - 4 * day, durationMinutes = 45, caloriesBurned = 340),

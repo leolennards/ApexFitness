@@ -103,24 +103,61 @@ object StatsCalculations {
         return result
     }
 
-    // Total weight lifted (weight x reps) for one log, finished sets only
-    private fun logVolume(log: WorkoutLog): Double =
-        log.exercises.sumOf { ex -> ex.sets.filter { it.completed }.sumOf { it.weight * it.reps } }
+    // How one exercise is going: best set in the last 4 weeks against the 4 weeks before that.
+    // Weighted exercises compare the heaviest weight, bodyweight ones compare the most reps.
+    data class StrengthTrend(
+        val exerciseName: String,
+        val weighted: Boolean,
+        val current: Double,
+        val previous: Double?
+    ) {
+        val change: Double? get() = previous?.let { current - it }
+    }
 
-    // Total volume for each of the last few weeks, oldest first. These are rolling 7-day blocks, not calendar weeks.
-    fun weeklyVolume(logs: List<WorkoutLog>, weeks: Int = 8): List<Double> {
-        val now = Calendar.getInstance().timeInMillis
-        val msPerWeek = 7L * 24 * 60 * 60 * 1000
-        val buckets = DoubleArray(weeks)
-        logs.forEach { log ->
-            val diff = now - log.dateMillis
-            if (diff < 0) return@forEach
-            val weekIndex = (diff / msPerWeek).toInt()
-            if (weekIndex in 0 until weeks) {
-                buckets[weeks - 1 - weekIndex] += logVolume(log)
+    // The exercises I've done most in the last 4 weeks, most frequent first
+    fun strengthProgress(logs: List<WorkoutLog>, limit: Int = 5): List<StrengthTrend> {
+        val dayMs = 24L * 60 * 60 * 1000
+        val now = System.currentTimeMillis()
+        val recentCutoff = now - 28 * dayMs
+        val priorCutoff = now - 56 * dayMs
+
+        // Sessions per exercise in the last 4 weeks, so the list shows what I actually train
+        val sessionCounts = linkedMapOf<String, Int>()
+        val displayNames = mutableMapOf<String, String>()
+        logs.filter { it.dateMillis >= recentCutoff }.forEach { log ->
+            log.exercises.forEach { ex ->
+                if (ex.sets.none { it.completed }) return@forEach
+                val key = ex.name.trim().lowercase()
+                if (key.isBlank()) return@forEach
+                sessionCounts[key] = (sessionCounts[key] ?: 0) + 1
+                displayNames.putIfAbsent(key, ex.name.trim())
             }
         }
-        return buckets.toList()
+
+        // Completed sets for one exercise between two times
+        fun setsFor(key: String, from: Long, until: Long): List<LoggedSet> =
+            logs.filter { it.dateMillis in from until until }
+                .flatMap { log -> log.exercises.filter { it.name.trim().lowercase() == key } }
+                .flatMap { ex -> ex.sets.filter { it.completed && (it.weight > 0 || it.reps > 0) } }
+
+        return sessionCounts.entries
+            .sortedByDescending { it.value }
+            .mapNotNull { (key, _) ->
+                val recent = setsFor(key, recentCutoff, now + dayMs)
+                if (recent.isEmpty()) return@mapNotNull null
+                val prior = setsFor(key, priorCutoff, recentCutoff)
+                val weighted = recent.any { it.weight > 0 }
+                fun best(sets: List<LoggedSet>): Double? =
+                    if (weighted) sets.filter { it.weight > 0 }.maxOfOrNull { it.weight }
+                    else sets.maxOfOrNull { it.reps.toDouble() }
+                StrengthTrend(
+                    exerciseName = displayNames[key] ?: key,
+                    weighted = weighted,
+                    current = best(recent) ?: return@mapNotNull null,
+                    previous = best(prior)
+                )
+            }
+            .take(limit)
     }
 
     // Completed sets per muscle group over the last few days, most trained first.
