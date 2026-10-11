@@ -37,7 +37,6 @@ import androidx.compose.ui.semantics.semantics
 import com.example.apexfitness.ui.theme.ApexSecondaryButton
 import com.example.apexfitness.ui.theme.motionSpring
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -980,7 +979,7 @@ private fun HomeSkeleton(topContentPadding: androidx.compose.ui.unit.Dp, bottomC
             SkeletonCircle(size = Dimens.MinTouchTarget)
         }
         Spacer(modifier = Modifier.height(4.dp))
-        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(236.dp), shape = RoundedCornerShape(24.dp))
+        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(236.dp), shape = CardShape)
         Spacer(modifier = Modifier.height(Dimens.Space1))
         Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space3)) {
             repeat(3) { SkeletonBlock(modifier = Modifier.weight(1f).height(56.dp)) }
@@ -1047,7 +1046,7 @@ private fun HomeMetricsRow(
     val shownStreak by rememberCountUpInt(streak)
     val shownWorkouts by rememberCountUpInt(totalWorkouts)
     val shownPercent by rememberCountUpInt(weeklyPercent)
-    val valueStyle = ApexText.Numeral.copy(fontSize = 40.sp, lineHeight = 42.sp)
+    val valueStyle = ApexText.MetricNumeral
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -1066,7 +1065,7 @@ private fun MetricDivider() {
     Box(
         modifier = Modifier
             .width(Dimens.Hairline)
-            .height(40.dp)
+            .height(36.dp)
             .background(MaterialTheme.apex.hairline)
     )
 }
@@ -1116,7 +1115,7 @@ fun WaterWidgetCard(
                     modifier = Modifier.padding(start = 2.dp, bottom = 3.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(Dimens.Space1 + 2.dp))
+            Spacer(modifier = Modifier.height(Dimens.Space1))
             ApexProgressBar(progress = progressFraction, modifier = Modifier.fillMaxWidth())
         }
         Spacer(modifier = Modifier.width(Dimens.Space3))
@@ -1153,7 +1152,7 @@ fun ResumeWorkoutCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .glassPanel(glassState, shape = RoundedCornerShape(24.dp))
+            .glassPanel(glassState, shape = CardShape)
             .padding(Dimens.Space3)
     ) {
         Text(
@@ -1207,7 +1206,7 @@ fun TodaysChallengeCard(
         modifier = modifier
             .fillMaxWidth()
             .sharedCardBounds(sharedKey)
-            .glassPanel(glassState, shape = RoundedCornerShape(24.dp))
+            .glassPanel(glassState, shape = CardShape)
             .padding(Dimens.Space3)
     ) {
         Text(
@@ -1257,7 +1256,7 @@ fun NoRoutineTodayCard(modifier: Modifier = Modifier, glassState: com.example.ap
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .glassPanel(glassState, shape = RoundedCornerShape(24.dp))
+            .glassPanel(glassState, shape = CardShape)
             .padding(Dimens.Space3)
     ) {
         Text(
@@ -1281,6 +1280,7 @@ fun NoRoutineTodayCard(modifier: Modifier = Modifier, glassState: com.example.ap
         ApexSecondaryButton(
             text = "Build a routine",
             onClick = onCreateRoutine,
+            modifier = Modifier.fillMaxWidth(),
             icon = Icons.Outlined.Add
         )
     }

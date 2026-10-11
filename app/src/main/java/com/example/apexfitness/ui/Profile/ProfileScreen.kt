@@ -26,7 +26,6 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.sp
 import com.example.apexfitness.ui.theme.MetricBlock
 import androidx.compose.material.icons.outlined.Flag
@@ -419,7 +418,7 @@ private fun LevelProgressCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .glassPanel(glassState, shape = RoundedCornerShape(24.dp))
+            .glassPanel(glassState, shape = CardShape)
             .padding(Dimens.Space3)
     ) {
         Text(
@@ -468,7 +467,7 @@ private fun ProfileStatsRow(
     val shownWorkouts by rememberCountUpInt(totalWorkouts)
     val shownStreak by rememberCountUpInt(streak)
     val shownBadges by rememberCountUpInt(badges)
-    val valueStyle = ApexText.Numeral.copy(fontSize = 36.sp, lineHeight = 40.sp)
+    val valueStyle = ApexText.MetricNumeral
     val valueColor = MaterialTheme.colorScheme.onBackground
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         MetricBlock(value = groupThousands(shownWorkouts), label = "WORKOUTS", modifier = Modifier.weight(1f), valueStyle = valueStyle, valueColor = valueColor)
@@ -618,7 +617,7 @@ private fun ProfileSkeleton(topContentPadding: Dp, bottomContentPadding: Dp) {
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(128.dp), shape = RoundedCornerShape(24.dp))
+        SkeletonBlock(modifier = Modifier.fillMaxWidth().height(128.dp), shape = CardShape)
         Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Space3)) {
             repeat(3) { SkeletonBlock(modifier = Modifier.weight(1f).height(52.dp)) }
         }

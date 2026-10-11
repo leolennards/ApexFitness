@@ -158,6 +158,15 @@ object ApexText {
         letterSpacing = (-0.5).sp,
         fontFeatureSettings = "tnum"
     )
+    // The row of three numbers on Home and Profile
+    val MetricNumeral = TextStyle(
+        fontFamily = ArchivoCondensedFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 36.sp,
+        lineHeight = 40.sp,
+        letterSpacing = (-0.5).sp,
+        fontFeatureSettings = "tnum"
+    )
     val NumeralSmall = TextStyle(
         fontFamily = ArchivoCondensedFamily,
         fontWeight = FontWeight.SemiBold,

@@ -1534,9 +1534,9 @@ private fun SessionExerciseCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(CardShape)
             .background(MaterialTheme.colorScheme.surface)
-            .border(Dimens.Hairline, borderColor, RoundedCornerShape(24.dp))
+            .border(Dimens.Hairline, borderColor, CardShape)
             .alpha(if (isDone) 0.7f else 1f)
             .padding(start = Dimens.Space3, end = Dimens.Space2, top = Dimens.Space2, bottom = Dimens.Space2)
     ) {
