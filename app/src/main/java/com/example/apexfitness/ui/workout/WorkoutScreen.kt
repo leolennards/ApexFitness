@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -57,6 +58,7 @@ import com.example.apexfitness.ui.theme.apexClickable
 import com.example.apexfitness.ui.theme.glassPanel
 import com.example.apexfitness.ui.theme.motionTween
 import com.example.apexfitness.ui.theme.rememberGlassState
+import com.example.apexfitness.ui.theme.ApexPrimaryButton
 import com.example.apexfitness.ui.theme.sharedCardBounds
 import com.example.apexfitness.ui.theme.staggeredEntrance
 
@@ -114,7 +116,7 @@ private fun WorkoutTabContent(
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3 + topContentPadding,
+            top = Dimens.Space2 + topContentPadding,
             bottom = Dimens.Space3 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2 - 4.dp)
@@ -196,10 +198,17 @@ private fun WorkoutTabContent(
                     )
                     Spacer(modifier = Modifier.height(Dimens.Space1))
                     Text(
-                        text = "Tap Manage to build your first custom routine.",
+                        text = "Build a routine and pick its days, and your week fills in here.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.apex.mutedText,
                         textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(Dimens.Space3))
+                    // Same action as Manage, but right where you're looking
+                    ApexPrimaryButton(
+                        text = "Build a routine",
+                        onClick = onManageRoutines,
+                        icon = Icons.Outlined.Add
                     )
                 }
             }
@@ -481,7 +490,7 @@ private fun WorkoutTabSkeleton(topContentPadding: Dp, bottomContentPadding: Dp) 
         contentPadding = PaddingValues(
             start = Dimens.ScreenEdge,
             end = Dimens.ScreenEdge,
-            top = Dimens.Space3 + topContentPadding,
+            top = Dimens.Space2 + topContentPadding,
             bottom = Dimens.Space3 + bottomContentPadding
         ),
         verticalArrangement = Arrangement.spacedBy(Dimens.Space2 - 4.dp)
