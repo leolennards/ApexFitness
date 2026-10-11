@@ -149,7 +149,7 @@ fun WelcomeScreen(navController: NavController) {
                     WelcomeStep(
                         number = "03",
                         title = "Track",
-                        description = "Streaks, records and weekly volume.",
+                        description = "Streaks, records and strength progress.",
                         modifier = Modifier.staggeredEntrance(index = 5, key = "welcome-step-3")
                     )
                 }
